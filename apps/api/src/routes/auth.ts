@@ -196,23 +196,49 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
 
     const profile = (await profileResponse.json()) as SpotifyProfile;
 
-    let user = await db.query.users.findFirst({
-      where: eq(users.spotifyId, profile.id),
-    });
+    let user;
+    try {
+      user = await db.query.users.findFirst({
+        where: eq(users.spotifyId, profile.id),
+      });
+    } catch {
+      // Fallback: use direct query if db.query fails
+      const result = await db
+        .select()
+        .from(users)
+        .where(eq(users.spotifyId, profile.id))
+        .limit(1);
+      user = result[0] || null;
+    }
 
     if (!user) {
-      const [newUser] = await db
-        .insert(users)
-        .values({
-          spotifyId: profile.id,
-          email: profile.email,
-          displayName: profile.display_name,
-          refreshToken: encrypt(tokens.refresh_token, env.ENCRYPTION_KEY),
-          accessToken: tokens.access_token,
-          tokenExpiry: new Date(Date.now() + tokens.expires_in * 1000),
-        })
-        .returning();
-      user = newUser!;
+      let result;
+      try {
+        result = await db
+          .insert(users)
+          .values({
+            spotifyId: profile.id,
+            email: profile.email,
+            displayName: profile.display_name,
+            refreshToken: encrypt(tokens.refresh_token, env.ENCRYPTION_KEY),
+            accessToken: tokens.access_token,
+            tokenExpiry: new Date(Date.now() + tokens.expires_in * 1000),
+          })
+          .returning();
+      } catch {
+        result = await db
+          .insert(users)
+          .values({
+            spotifyId: profile.id,
+            email: profile.email,
+            displayName: profile.display_name,
+            refreshToken: encrypt(tokens.refresh_token, env.ENCRYPTION_KEY),
+            accessToken: tokens.access_token,
+            tokenExpiry: new Date(Date.now() + tokens.expires_in * 1000),
+          })
+          .returning();
+      }
+      user = result[0];
     } else {
       await db
         .update(users)

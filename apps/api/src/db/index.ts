@@ -1,6 +1,6 @@
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { Pool } from 'pg';
-import * as schema from './schema.js';
+import { schema } from './schema.js';
 
 let pool: Pool | null = null;
 
@@ -13,12 +13,14 @@ function getPool(): Pool {
   return pool;
 }
 
-// Lazy db initialization
+// Lazy db initialization with relations for query API
 let dbInstance: ReturnType<typeof drizzle> | null = null;
 
 export function getDb() {
   if (!dbInstance) {
-    dbInstance = drizzle(getPool(), { schema });
+    dbInstance = drizzle(getPool(), { 
+      schema,
+    });
   }
   return dbInstance;
 }

@@ -3,6 +3,10 @@ import cors from '@fastify/cors';
 import cookie from '@fastify/cookie';
 import jwt from '@fastify/jwt';
 import apiRoutes from './routes/index.js';
+import { migrate } from 'drizzle-orm/node-postgres/migrator';
+import { Pool } from 'pg';
+import { drizzle } from 'drizzle-orm/node-postgres';
+import * as schema from './db/schema.js';
 
 function getEnv() {
   const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://localhost:5432/sptinder';
@@ -18,6 +22,70 @@ function getEnv() {
 }
 
 const env = getEnv();
+
+async function runMigrations() {
+  const pool = new Pool({ connectionString: env.DATABASE_URL });
+  const db = drizzle(pool, { schema });
+  try {
+    await migrate(db, { migrationsFolder: './dist/db/migrations' });
+    console.log('Migrations completed successfully');
+  } catch (err) {
+    console.error('Migration failed:', err);
+    // Don't exit - let the server start and handle errors gracefully
+  } finally {
+    await pool.end();
+  }
+}
+
+// Initialize database tables directly if migrations fail
+async function initTables() {
+  const pool = new Pool({ connectionString: env.DATABASE_URL });
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS "users" (
+        "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+        "spotify_id" text NOT NULL UNIQUE,
+        "email" text,
+        "display_name" text,
+        "refresh_token" text,
+        "access_token" text,
+        "token_expiry" timestamp,
+        "created_at" timestamp DEFAULT now() NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS "tracks" (
+        "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+        "spotify_id" text NOT NULL UNIQUE,
+        "name" text NOT NULL,
+        "artist" text NOT NULL,
+        "album" text,
+        "preview_url" text,
+        "image_url" text,
+        "duration_ms" integer,
+        "popularity" integer
+      );
+      CREATE TABLE IF NOT EXISTS "swipes" (
+        "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+        "user_id" uuid NOT NULL REFERENCES "users"("id"),
+        "track_id" uuid NOT NULL REFERENCES "tracks"("id"),
+        "direction" text NOT NULL,
+        "swiped_at" timestamp DEFAULT now() NOT NULL,
+        CONSTRAINT "swipes_user_id_track_id_unique" UNIQUE("user_id","track_id")
+      );
+      CREATE TABLE IF NOT EXISTS "playlists" (
+        "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+        "user_id" uuid NOT NULL REFERENCES "users"("id"),
+        "spotify_playlist_id" text NOT NULL,
+        "name" text DEFAULT 'Sptinder' NOT NULL,
+        "synced_at" timestamp
+      );
+    `);
+    console.log('Tables initialized');
+  } catch (err) {
+    console.error('Table init failed:', err);
+  } finally {
+    await pool.end();
+  }
+}
 
 async function buildServer() {
   const fastify = Fastify({
@@ -59,6 +127,11 @@ async function buildServer() {
 }
 
 async function start() {
+  // Initialize database tables
+  if (env.NODE_ENV === 'production' && env.DATABASE_URL) {
+    await initTables();
+  }
+
   const server = await buildServer();
 
   try {

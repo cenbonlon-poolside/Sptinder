@@ -1,4 +1,9 @@
 services:
+  - type: postgresql
+    name: sptinder-db
+    region: ohio
+    plan: free
+
   - type: web
     name: sptinder-api
     region: ohio
@@ -12,6 +17,10 @@ services:
         value: 10000
       - key: NODE_ENV
         value: production
+      - key: DATABASE_URL
+        fromService:
+          name: sptinder-db
+          property: connectionString
       - key: SPOTIFY_CLIENT_ID
         value: 08bb68f750b84bee90a3327e147d8dca
       - key: SPOTIFY_CLIENT_SECRET
@@ -22,13 +31,13 @@ services:
         value: 3hLjWqZ6tvMLXGTNaCeyKEXFk27yoNyM
       - key: REDIRECT_URI
         value: https://sptinder-api.onrender.com/api/auth/callback
-      # Add DATABASE_URL after creating PostgreSQL database
-      # - key: DATABASE_URL
-      #   value: <paste-connection-string-here>
+      - key: FRONTEND_URL
+        value: https://sptinder-web.onrender.com
 
-# Deploy Static Site separately:
-# 1. "New +" → "Static Site"
-# 2. Name: sptinder-web
-# 3. Root Directory: apps/web  
-# 4. Build Command: npm install && npm run build
-# 5. Publish Directory: dist
+  - type: static
+    name: sptinder-web
+    region: ohio
+    plan: free
+    rootDir: apps/web
+    buildCommand: npm install && npm run build
+    publishDir: dist

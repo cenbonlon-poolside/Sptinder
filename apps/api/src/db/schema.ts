@@ -54,7 +54,7 @@ export const playlists = pgTable('playlists', {
   syncedAt: timestamp('synced_at'),
 });
 
-// Relations
+// Relations - for db.query API
 export const usersRelations = relations(users, ({ many }) => ({
   swipes: many(swipes),
   playlists: many(playlists),
@@ -81,6 +81,18 @@ export const playlistsRelations = relations(playlists, ({ one }) => ({
     references: [users.id],
   }),
 }));
+
+// Export all schema including relations for query API
+export const schema = {
+  users,
+  tracks,
+  swipes,
+  playlists,
+  usersRelations,
+  tracksRelations,
+  swipesRelations,
+  playlistsRelations,
+};
 
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;

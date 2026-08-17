@@ -5,6 +5,12 @@ import { eq, notInArray } from 'drizzle-orm';
 
 const SPOTIFY_API_URL = 'https://api.spotify.com/v1';
 
+// Genre seeds for track discovery
+const DISCOVERY_GENRES = [
+  'pop', 'rock', 'hip-hop', 'electronic', 'indie',
+  'alternative', 'dance', 'country', 'r-n-b', 'jazz'
+];
+
 interface Track {
   id: string;
   spotifyId: string;
@@ -17,20 +23,18 @@ interface Track {
   popularity: number | null;
 }
 
-interface SpotifyGenreResponse {
-  genres: string[];
-}
-
-interface SpotifyRecommendationsResponse {
-  tracks: Array<{
-    id: string;
-    name: string;
-    artists: Array<{ name: string }>;
-    album: { name: string; images: Array<{ url: string }> } | null;
-    preview_url: string | null;
-    duration_ms: number;
-    popularity: number;
-  }>;
+interface SpotifySearchResponse {
+  tracks: {
+    items: Array<{
+      id: string;
+      name: string;
+      artists: Array<{ name: string }>;
+      album: { name: string; images: Array<{ url: string }> } | null;
+      preview_url: string | null;
+      duration_ms: number;
+      popularity: number;
+    }>;
+  };
 }
 
 const trackRoutes: FastifyPluginAsync = async (fastify) => {
@@ -42,27 +46,29 @@ const trackRoutes: FastifyPluginAsync = async (fastify) => {
     async (request: FastifyRequest) => {
       const userId = (request.user as { userId: string }).userId;
 
+      // First, check if user has swiped any tracks
       const userSwipes = await db.query.swipes.findMany({
         where: eq(swipes.userId, userId),
         columns: { trackId: true },
       });
 
-      const swipedTrackIds = userSwipes.map((s: any) => s.trackId);
+      const swipedTrackIds = userSwipes.map((s: { trackId: string }) => s.trackId);
 
+      // Try to get existing tracks from database
       let availableTracks = await db.query.tracks.findMany({
         where: swipedTrackIds.length > 0 ? notInArray(tracks.id, swipedTrackIds) : undefined,
         limit: 1,
       });
 
       if (availableTracks.length === 0) {
-        availableTracks = await fetchAndStoreRecommendations(userId);
+        availableTracks = await fetchAndStoreTracks(userId);
       }
 
-      return { tracks: availableTracks as Track[] };
+      return { tracks: availableTracks };
     },
   );
 
-  async function fetchAndStoreRecommendations(userId: string): Promise<Track[]> {
+  async function fetchAndStoreTracks(userId: string): Promise<Track[]> {
     const userRecord = await db.query.users.findFirst({
       where: eq(users.id, userId),
     });
@@ -71,33 +77,28 @@ const trackRoutes: FastifyPluginAsync = async (fastify) => {
       return [];
     }
 
-    const genresResponse = await fetch(`${SPOTIFY_API_URL}/recommendations/available-genre-seeds`, {
+    // Use Search API which works for development mode apps
+    const randomGenre = DISCOVERY_GENRES[Math.floor(Math.random() * DISCOVERY_GENRES.length)];
+    const params = new URLSearchParams({
+      q: `genre:${randomGenre} year:2024`,
+      type: 'track',
+      limit: '50',
+      market: 'US',
+    });
+
+    const searchResponse = await fetch(`${SPOTIFY_API_URL}/search?${params}`, {
       headers: {
         Authorization: `Bearer ${userRecord.accessToken}`,
       },
     });
 
-    if (!genresResponse.ok) {
+    if (!searchResponse.ok) {
+      console.error('Search failed:', searchResponse.status);
       return [];
     }
 
-    const { genres } = (await genresResponse.json()) as SpotifyGenreResponse;
-    const seedGenres = genres.slice(0, 5).join(',');
-
-    const recommendationsResponse = await fetch(
-      `${SPOTIFY_API_URL}/recommendations?seed_genres=${seedGenres}&limit=50&market=US`,
-      {
-        headers: {
-          Authorization: `Bearer ${userRecord.accessToken}`,
-        },
-      },
-    );
-
-    if (!recommendationsResponse.ok) {
-      return [];
-    }
-
-    const { tracks: spotifyTracks } = (await recommendationsResponse.json()) as SpotifyRecommendationsResponse;
+    const data = (await searchResponse.json()) as SpotifySearchResponse;
+    const spotifyTracks = data.tracks.items;
 
     const newTracks = await db
       .insert(tracks)
@@ -116,7 +117,7 @@ const trackRoutes: FastifyPluginAsync = async (fastify) => {
       .onConflictDoNothing()
       .returning();
 
-    return newTracks.map((t: any) => ({
+    return (newTracks as Track[]).map((t) => ({
       id: t.id,
       spotifyId: t.spotifyId,
       name: t.name,
