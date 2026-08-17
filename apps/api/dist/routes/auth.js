@@ -8,7 +8,15 @@ const env = validateEnv();
 const SPOTIFY_AUTH_URL = 'https://accounts.spotify.com/authorize';
 const SPOTIFY_TOKEN_URL = 'https://accounts.spotify.com/api/token';
 const SPOTIFY_PROFILE_URL = 'https://api.spotify.com/v1/me';
-const REDIRECT_URI = 'https://caddie-deploy-vehicular.ngrok-free.dev/auth/callback';
+// Use REDIRECT_URI from env, or derive from request
+function getRedirectUri(request) {
+    if (process.env.REDIRECT_URI) {
+        return process.env.REDIRECT_URI;
+    }
+    const host = request.headers.host || 'localhost:3000';
+    const protocol = request.headers['x-forwarded-proto'] || 'http';
+    return `${protocol}://${host}/auth/callback`;
+}
 function generateCodeVerifier() {
     return crypto.randomBytes(64).toString('hex').slice(0, 128);
 }
@@ -50,10 +58,11 @@ const authRoutes = async (fastify) => {
         const codeVerifier = generateCodeVerifier();
         const codeChallenge = generateCodeChallenge(codeVerifier);
         const state = crypto.randomBytes(16).toString('hex');
+        const redirectUri = getRedirectUri(request);
         const params = new URLSearchParams({
             client_id: env.SPOTIFY_CLIENT_ID,
             response_type: 'code',
-            redirect_uri: REDIRECT_URI,
+            redirect_uri: redirectUri,
             code_challenge_method: 'S256',
             code_challenge: codeChallenge,
             state,
@@ -79,6 +88,7 @@ const authRoutes = async (fastify) => {
     });
     fastify.get('/callback', async (request, reply) => {
         const { code, state } = callbackBodySchema.parse(request.query);
+        const redirectUri = getRedirectUri(request);
         const storedState = request.cookies['spotify_state'];
         const codeVerifier = request.cookies['spotify_verifier'];
         if (!storedState || storedState !== state) {
@@ -97,7 +107,7 @@ const authRoutes = async (fastify) => {
                 client_secret: env.SPOTIFY_CLIENT_SECRET,
                 grant_type: 'authorization_code',
                 code,
-                redirect_uri: REDIRECT_URI,
+                redirect_uri: redirectUri,
                 code_verifier: codeVerifier,
             }),
         });
