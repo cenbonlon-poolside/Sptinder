@@ -165,29 +165,49 @@ async function fetchAndStoreTracks(userId: string): Promise<Track[] | { error: s
   // Use Search API which works for development mode apps
   // Query without year restriction for better results on new apps
   const randomGenre = DISCOVERY_GENRES[Math.floor(Math.random() * DISCOVERY_GENRES.length)];
-  const params = new URLSearchParams({
-    q: `genre:${randomGenre}`,
-    type: 'track',
-    limit: '50',
-  });
+  const searchQueries = [
+    `genre:${randomGenre}`,
+    'pop',
+    'year:2024',
+    'track:hello',
+  ];
 
-  const searchResponse = await fetch(`${SPOTIFY_API_URL}/search?${params}`, {
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-    },
-  });
-
-  console.log('Spotify search response status:', searchResponse.status);
+  let spotifyTracks: SpotifySearchResponse['tracks']['items'] = [];
   
-  if (!searchResponse.ok) {
-    const errorText = await searchResponse.text();
-    console.error('Search failed:', searchResponse.status, errorText);
-    return [];
+  for (const query of searchQueries) {
+    const params = new URLSearchParams({
+      q: query,
+      type: 'track',
+      limit: '50',
+    });
+
+    const searchResponse = await fetch(`${SPOTIFY_API_URL}/search?${params}`, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+
+    console.log(`Search query '${query}' response status:`, searchResponse.status);
+    
+    if (!searchResponse.ok) {
+      const errorText = await searchResponse.text();
+      console.error(`Search failed for '${query}':`, searchResponse.status, errorText);
+      continue;
+    }
+
+    const data = (await searchResponse.json()) as SpotifySearchResponse;
+    console.log(`Search '${query}' returned tracks:`, data.tracks?.items?.length || 0);
+    
+    if (data.tracks?.items && data.tracks.items.length > 0) {
+      spotifyTracks = data.tracks.items;
+      break;
+    }
   }
 
-  const data = (await searchResponse.json()) as SpotifySearchResponse;
-  console.log('Spotify search returned tracks:', data.tracks?.items?.length || 0);
-  const spotifyTracks = data.tracks.items;
+  if (spotifyTracks.length === 0) {
+    console.error('All search queries failed, returning empty');
+    return [];
+  }
 
   const newTracks = await db
     .insert(tracks)
