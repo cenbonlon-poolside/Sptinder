@@ -18,8 +18,16 @@ function App() {
   const [track, setTrack] = useState<Track | null>(null);
   const [loading, setLoading] = useState(true);
   const [authenticated, setAuthenticated] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    // Check for error from redirect
+    const urlParams = new URLSearchParams(window.location.search);
+    const errorParam = urlParams.get('error');
+    if (errorParam) {
+      setError(decodeURIComponent(errorParam));
+    }
+    
     checkAuth();
     fetchTrack();
   }, []);
@@ -79,6 +87,11 @@ function App() {
         <div className="text-center">
           <h1 className="mb-8 text-6xl font-bold text-white">Sptinder</h1>
           <p className="mb-6 text-xl text-gray-200">Swipe to discover your next favorite track</p>
+          {error && (
+            <p className="mb-4 text-red-400 text-sm max-w-sm">
+              Error: {error}
+            </p>
+          )}
           <button
             onClick={handleLogin}
             className="rounded-full bg-green-500 px-8 py-3 text-lg font-semibold text-white transition hover:bg-green-600"
