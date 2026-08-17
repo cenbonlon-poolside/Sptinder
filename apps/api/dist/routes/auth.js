@@ -23,7 +23,7 @@ function getRedirectUri(request) {
         return process.env.REDIRECT_URI;
     }
     const host = request.headers.host || 'localhost:3000';
-    const protocol = request.headers['x-forwarded-proto'] || 'http';
+    const protocol = request.headers['x-forwarded-proto'] || 'https';
     return `${protocol}://${host}/api/auth/callback`;
 }
 function generateCodeVerifier() {
