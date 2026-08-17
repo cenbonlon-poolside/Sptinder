@@ -69,7 +69,7 @@ function App() {
       // Check for token in localStorage first (bypasses Chrome bounce tracking)
       const storedToken = localStorage.getItem('authToken');
       
-      const endpoint = storedToken ? `${API_BASE}/api/verify-token` : `${API_BASE}/api/auth/me`;
+      const endpoint = storedToken ? `${API_BASE}/api/auth/verify-token` : `${API_BASE}/api/auth/me`;
       const headers: Record<string, string> = storedToken 
         ? { 'Authorization': `Bearer ${storedToken}` }
         : {};
