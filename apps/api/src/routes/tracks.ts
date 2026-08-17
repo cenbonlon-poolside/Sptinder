@@ -138,40 +138,44 @@ const trackRoutes: FastifyPluginAsync = async (fastify) => {
       .limit(1);
     
     let userRecord = result[0] || null;
-    console.log('userRecord found:', !!userRecord, 'accessToken:', !!userRecord?.accessToken, 'tokenExpiry:', userRecord?.tokenExpiry);
+    console.log('userRecord found:', !!userRecord, 'accessToken:', !!userRecord?.accessToken, 'tokenExpiry:', userRecord?.tokenExpiry, 'hasRefresh:', !!userRecord?.refreshToken);
 
-    if (!userRecord?.accessToken && !userRecord?.refreshToken) {
-      console.log('No tokens, returning empty');
-      return [];
-    }
-
-    // Get fresh access token - refresh if needed
-    let accessToken = userRecord.accessToken;
+    let accessToken = userRecord?.accessToken || null;
     const env = {
       SPOTIFY_CLIENT_ID: process.env.SPOTIFY_CLIENT_ID!,
       SPOTIFY_CLIENT_SECRET: process.env.SPOTIFY_CLIENT_SECRET!,
       ENCRYPTION_KEY: process.env.ENCRYPTION_KEY!,
     };
 
-    if (!accessToken || (userRecord.tokenExpiry && new Date(userRecord.tokenExpiry) < new Date())) {
+    // Check if we need to refresh the access token
+    const needsRefresh = !accessToken || (userRecord?.tokenExpiry && new Date(userRecord.tokenExpiry) < new Date());
+    
+    if (needsRefresh) {
       console.log('Access token expired or missing, refreshing...');
-      if (userRecord.refreshToken) {
-        const decryptedRefreshToken = decrypt(userRecord.refreshToken, env.ENCRYPTION_KEY);
-        const refreshed = await refreshAccessToken(decryptedRefreshToken);
-        if (refreshed) {
-          accessToken = refreshed.accessToken;
-          // Update user with new token
-          await db
-            .update(users)
-            .set({
-              accessToken: refreshed.accessToken,
-              tokenExpiry: new Date(Date.now() + refreshed.expiresIn * 1000),
-            })
-            .where(eq(users.id, userId));
-        } else {
-          console.log('Token refresh failed, returning empty');
-          return [];
-        }
+      
+      if (!userRecord?.refreshToken) {
+        console.log('No refresh token available - user needs to re-login');
+        return [];
+      }
+      
+      const decryptedRefreshToken = decrypt(userRecord.refreshToken, env.ENCRYPTION_KEY);
+      console.log('Attempting to refresh with decrypt check:', decryptedRefreshToken ? 'token present' : 'empty');
+      
+      const refreshed = await refreshAccessToken(decryptedRefreshToken);
+      if (refreshed) {
+        accessToken = refreshed.accessToken;
+        // Update user with new token
+        await db
+          .update(users)
+          .set({
+            accessToken: refreshed.accessToken,
+            tokenExpiry: new Date(Date.now() + refreshed.expiresIn * 1000),
+          })
+          .where(eq(users.id, userId));
+        console.log('Token refreshed successfully');
+      } else {
+        console.log('Token refresh failed, returning empty');
+        return [];
       }
     }
 
