@@ -207,6 +207,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
     user = result[0] || null;
 
     if (!user) {
+      console.log('Creating new user for spotifyId:', profile.id);
       let result;
       try {
         result = await db
@@ -235,6 +236,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       }
       user = result[0];
     } else {
+      console.log('Updating existing user, spotifyId:', profile.id, 'userId:', user.id);
       await db
         .update(users)
         .set({
