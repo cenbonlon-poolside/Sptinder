@@ -71,9 +71,20 @@ function App() {
         headers,
       });
       
-      setAuthenticated(response.ok);
       if (response.ok) {
+        const data = await response.json();
+        // Check if user has valid Spotify tokens stored
+        if (storedToken && data.user && (!data.user.hasRefreshToken || !data.user.hasAccessToken)) {
+          // User needs to re-authenticate
+          setError('Please log in again');
+          localStorage.removeItem('authToken');
+          setAuthenticated(false);
+          return;
+        }
+        setAuthenticated(true);
         fetchTrack();
+      } else {
+        setAuthenticated(false);
       }
     } catch (err) {
       console.error('Auth check failed:', err);
