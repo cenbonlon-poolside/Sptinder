@@ -237,14 +237,19 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       user = result[0];
     } else {
       console.log('Updating existing user, spotifyId:', profile.id, 'userId:', user.id);
-      await db
-        .update(users)
-        .set({
-          refreshToken: encrypt(tokens.refresh_token, env.ENCRYPTION_KEY),
-          accessToken: tokens.access_token,
-          tokenExpiry: new Date(Date.now() + tokens.expires_in * 1000),
-        })
-        .where(eq(users.id, user.id));
+      try {
+        const updateResult = await db
+          .update(users)
+          .set({
+            refreshToken: encrypt(tokens.refresh_token, env.ENCRYPTION_KEY),
+            accessToken: tokens.access_token,
+            tokenExpiry: new Date(Date.now() + tokens.expires_in * 1000),
+          })
+          .where(eq(users.id, user.id));
+        console.log('Update result:', updateResult);
+      } catch (err) {
+        console.error('Update failed:', err);
+      }
     }
 
     const token = fastify.jwt.sign({ userId: user.id, spotifyId: user.spotifyId });
