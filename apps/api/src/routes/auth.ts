@@ -199,6 +199,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
 
     let user;
     try {
+      // Use direct query to get all columns including accessToken
       user = await db.query.users.findFirst({
         where: eq(users.spotifyId, profile.id),
       });
