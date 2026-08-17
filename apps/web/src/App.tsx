@@ -20,6 +20,11 @@ function App() {
   const [authenticated, setAuthenticated] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // DEBUG: Show alert on first render
+  useEffect(() => {
+    console.log('App mounted, authenticated:', authenticated);
+  }, []);
+  
   console.log('App rendering, state:', { authenticated, loading, hasTrack: !!track });
 
   useEffect(() => {
