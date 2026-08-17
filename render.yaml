@@ -15,10 +15,5 @@ services:
       - key: REDIRECT_URI
         value: https://sptinder-api.onrender.com/auth/callback
 
-  - type: static
-    name: sptinder-web
-    region: ohio
-    plan: free
-    rootDir: apps/web
-    buildCommand: npm install && npm run build
-    publishPath: dist
+# Static site needs to be deployed separately as Render doesn't support it in blueprints yet
+# Deploy via "New Static Site" manually
