@@ -16,17 +16,29 @@ const DISCOVERY_GENRES = [
 // Decrypt refresh token (for token refresh)
 function decrypt(text: string, key: string): string {
   const parts = text.split(':');
-  if (parts.length !== 3) return '';
-  const [ivHex, encrypted, authTagHex] = parts;
-  const decipher = crypto.createDecipheriv(
-    'aes-256-gcm',
-    Buffer.from(key),
-    Buffer.from(ivHex, 'hex')
-  );
-  decipher.setAuthTag(Buffer.from(authTagHex, 'hex'));
-  let decrypted = decipher.update(encrypted, 'hex', 'utf8');
-  decrypted += decipher.final('utf8');
-  return decrypted;
+  if (parts.length !== 3) {
+    console.error('Decrypt failed - wrong format, parts:', parts.length);
+    return '';
+  }
+  if (key.length !== 32) {
+    console.error('Decrypt failed - wrong key length:', key.length);
+    return '';
+  }
+  try {
+    const [ivHex, encrypted, authTagHex] = parts;
+    const decipher = crypto.createDecipheriv(
+      'aes-256-gcm',
+      Buffer.from(key),
+      Buffer.from(ivHex, 'hex')
+    );
+    decipher.setAuthTag(Buffer.from(authTagHex, 'hex'));
+    let decrypted = decipher.update(encrypted, 'hex', 'utf8');
+    decrypted += decipher.final('utf8');
+    return decrypted;
+  } catch (err) {
+    console.error('Decrypt error:', err);
+    return '';
+  }
 }
 
 // Refresh access token using stored refresh token
