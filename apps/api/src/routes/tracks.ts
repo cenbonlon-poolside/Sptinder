@@ -47,7 +47,7 @@ const trackRoutes: FastifyPluginAsync = async (fastify) => {
         columns: { trackId: true },
       });
 
-      const swipedTrackIds = userSwipes.map((s) => s.trackId);
+      const swipedTrackIds = userSwipes.map((s: any) => s.trackId);
 
       let availableTracks = await db.query.tracks.findMany({
         where: swipedTrackIds.length > 0 ? notInArray(tracks.id, swipedTrackIds) : undefined,
@@ -116,7 +116,7 @@ const trackRoutes: FastifyPluginAsync = async (fastify) => {
       .onConflictDoNothing()
       .returning();
 
-    return newTracks.map((t) => ({
+    return newTracks.map((t: any) => ({
       id: t.id,
       spotifyId: t.spotifyId,
       name: t.name,

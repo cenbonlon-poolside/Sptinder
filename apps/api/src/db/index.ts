@@ -1,14 +1,34 @@
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { Pool } from 'pg';
 import * as schema from './schema.js';
-import { validateEnv } from '../env.js';
 
-const env = validateEnv();
+let pool: Pool | null = null;
 
-const pool = new Pool({
-  connectionString: env.DATABASE_URL,
+function getPool(): Pool {
+  if (!pool) {
+    pool = new Pool({
+      connectionString: process.env.DATABASE_URL!,
+    });
+  }
+  return pool;
+}
+
+// Lazy db initialization
+let dbInstance: ReturnType<typeof drizzle> | null = null;
+
+export function getDb() {
+  if (!dbInstance) {
+    dbInstance = drizzle(getPool(), { schema });
+  }
+  return dbInstance;
+}
+
+// Export db for compatibility - initializes on first use
+export const db = new Proxy({} as any, {
+  get(_target, prop) {
+    const instance = getDb();
+    return (instance as any)[prop];
+  }
 });
 
-export const db = drizzle(pool, { schema });
-
-export type Database = typeof db;
+export type Database = ReturnType<typeof drizzle>;

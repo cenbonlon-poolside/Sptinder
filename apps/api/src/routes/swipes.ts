@@ -78,7 +78,7 @@ const swipeRoutes: FastifyPluginAsync = async (fastify) => {
       });
 
       return {
-        swipes: userSwipes.map((s) => ({
+        swipes: userSwipes.map((s: any) => ({
           id: s.id,
           track: {
             id: s.track!.id,

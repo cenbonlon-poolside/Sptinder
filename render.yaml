@@ -12,8 +12,20 @@ services:
         value: 10000
       - key: NODE_ENV
         value: production
+      - key: SPOTIFY_CLIENT_ID
+        value: 08bb68f750b84bee90a3327e147d8dca
+      - key: SPOTIFY_CLIENT_SECRET
+        value: 8aae39d92fa4475dbf1126dd6147c7a5
+      - key: JWT_SECRET
+        value: Wz3xQ9KmNp2RvT8YhB4fLdJ6sA1cE5gI
+      - key: ENCRYPTION_KEY
+        value: 3hLjWqZ6tvMLXGTNaCeyKEXFk27yoNyM
       - key: REDIRECT_URI
         value: https://sptinder-api.onrender.com/auth/callback
 
-# Static site needs to be deployed separately as Render doesn't support it in blueprints yet
+# Static site needs to be deployed separately
 # Deploy via "New Static Site" manually
+# - Name: sptinder-web
+# - Root Directory: apps/web
+# - Build Command: npm install && npm run build
+# - Publish Directory: dist

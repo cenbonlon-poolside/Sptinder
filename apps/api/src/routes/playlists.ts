@@ -70,7 +70,7 @@ const playlistRoutes: FastifyPluginAsync = async (fastify) => {
         with: { track: true },
       });
 
-      const keptTracks = rightSwipes.filter((s) => s.direction === 'right').map((s) => s.track!);
+      const keptTracks = rightSwipes.filter((s: any) => s.direction === 'right').map((s: any) => s.track!);
 
       if (keptTracks.length === 0) {
         return { success: true, playlist: null } as const;
@@ -164,7 +164,7 @@ const playlistRoutes: FastifyPluginAsync = async (fastify) => {
       spotifyPlaylistId = playlist.spotifyPlaylistId;
 
       // Add tracks to playlist in batches of 100
-      const trackUris = keptTracks.map((t) => `spotify:track:${t.spotifyId}`);
+      const trackUris = keptTracks.map((t: any) => `spotify:track:${t.spotifyId}`);
       
       for (let i = 0; i < trackUris.length; i += 100) {
         const batch = trackUris.slice(i, i + 100);
