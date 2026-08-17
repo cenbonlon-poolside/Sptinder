@@ -1,0 +1,157 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+env:
+  AWS_REGION: us-east-1
+  ECR_REGISTRY: ${{ github.repository_owner }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com
+
+jobs:
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - run: npm ci
+      - run: cd apps/api && npx tsc --noEmit
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - run: npm ci
+      - run: npm run lint
+
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: password
+          POSTGRES_DB: sptinder
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - run: npm ci
+      - run: npm run test
+        env:
+          DATABASE_URL: postgresql://postgres:password@localhost:5432/sptinder
+
+  docker-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: docker/setup-buildx-action@v3
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: ${{ env.AWS_REGION }}
+          role-to-assume: ${{ secrets.DEPLOY_ROLE_ARN }}
+      - uses: aws-actions/amazon-ecr-login@v2
+      - run: |
+          IMAGE_TAG=${{ github.sha }}
+          docker build -f apps/api/Dockerfile -t ${{ env.ECR_REGISTRY }}/sptinder-api:$IMAGE_TAG .
+          docker tag ${{ env.ECR_REGISTRY }}/sptinder-api:$IMAGE_TAG ${{ env.ECR_REGISTRY }}/sptinder-api:latest
+          docker push ${{ env.ECR_REGISTRY }}/sptinder-api:$IMAGE_TAG
+          docker push ${{ env.ECR_REGISTRY }}/sptinder-api:latest
+      - run: |
+          IMAGE_TAG=${{ github.sha }}
+          docker build -f apps/web/Dockerfile -t ${{ env.ECR_REGISTRY }}/sptinder-web:$IMAGE_TAG .
+          docker tag ${{ env.ECR_REGISTRY }}/sptinder-web:$IMAGE_TAG ${{ env.ECR_REGISTRY }}/sptinder-web:latest
+          docker push ${{ env.ECR_REGISTRY }}/sptinder-web:$IMAGE_TAG
+          docker push ${{ env.ECR_REGISTRY }}/sptinder-web:latest
+
+  terraform-validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: '1.9.0'
+      - run: terraform -chdir=infra init -backend=false
+      - run: terraform -chdir=infra validate
+
+  terraform-plan:
+    runs-on: ubuntu-latest
+    needs: [typecheck, lint, test, docker-build, terraform-validate]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+      - run: terraform -chdir=infra init
+      - run: terraform -chdir=infra plan
+        env:
+          TF_VAR_domain_name: ${{ vars.DOMAIN_NAME }}
+          TF_VAR_spotify_client_id: ${{ secrets.SPOTIFY_CLIENT_ID }}
+          TF_VAR_spotify_client_secret: ${{ secrets.SPOTIFY_CLIENT_SECRET }}
+          TF_VAR_jwt_secret: ${{ secrets.JWT_SECRET }}
+          TF_VAR_encryption_key: ${{ secrets.ENCRYPTION_KEY }}
+          TF_VAR_certificate_arn: ${{ secrets.CERTIFICATE_ARN }}
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: terraform-plan
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: ${{ env.AWS_REGION }}
+          role-to-assume: ${{ secrets.DEPLOY_ROLE_ARN }}
+      - run: terraform -chdir=infra init
+      - run: terraform -chdir=infra apply -auto-approve
+        env:
+          TF_VAR_domain_name: ${{ vars.DOMAIN_NAME }}
+          TF_VAR_spotify_client_id: ${{ secrets.SPOTIFY_CLIENT_ID }}
+          TF_VAR_spotify_client_secret: ${{ secrets.SPOTIFY_CLIENT_SECRET }}
+          TF_VAR_jwt_secret: ${{ secrets.JWT_SECRET }}
+          TF_VAR_encryption_key: ${{ secrets.ENCRYPTION_KEY }}
+          TF_VAR_certificate_arn: ${{ secrets.CERTIFICATE_ARN }}
+
+  health-check:
+    runs-on: ubuntu-latest
+    needs: deploy
+    steps:
+      - name: Wait for health check
+        run: |
+          for i in {1..30}; do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://${{ vars.DOMAIN_NAME }}/health)
+            if [ "$STATUS" = "200" ]; then
+              echo "Health check passed"
+              exit 0
+            fi
+            echo "Waiting for deployment... ($i/30)"
+            sleep 10
+          done
+          echo "Health check failed"
+          exit 1
+      - name: Rollback on failure
+        if: failure()
+        run: |
+          echo "Implement rollback logic here"
+          # terraform -chdir=infra rollback to previous deployment

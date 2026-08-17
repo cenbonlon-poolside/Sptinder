@@ -1,0 +1,175 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [api, realtime, worker, frontend]
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: services/${{ matrix.service }}/package-lock.json
+
+    - name: Install dependencies
+      run: |
+        cd services/${{ matrix.service }}
+        npm ci
+
+    - name: Run linting
+      run: |
+        cd services/${{ matrix.service }}
+        npm run lint
+
+    - name: Run tests
+      run: |
+        cd services/${{ matrix.service }}
+        npm test -- --coverage --watchAll=false
+
+    - name: Upload coverage reports
+      uses: codecov/codecov-action@v3
+      with:
+        file: services/${{ matrix.service }}/coverage/lcov.info
+        flags: ${{ matrix.service }}
+        name: ${{ matrix.service }}-coverage
+
+  build-and-push:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    strategy:
+      matrix:
+        service: [api, realtime, worker, frontend]
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Log in to Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Extract metadata
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/${{ matrix.service }}
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=sha,prefix={{branch}}-
+          type=raw,value=latest,enable={{is_default_branch}}
+
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: services/${{ matrix.service }}
+        push: true
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+  deploy-staging:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/develop'
+    environment: staging
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure kubectl
+      uses: azure/k8s-set-context@v3
+      with:
+        method: kubeconfig
+        kubeconfig: ${{ secrets.KUBE_CONFIG_STAGING }}
+
+    - name: Deploy to staging
+      run: |
+        # Update images in k8s manifests
+        sed -i 's|image: .*|image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/api:latest|g' infrastructure/kubernetes/api-deployment.yaml
+        sed -i 's|image: .*|image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/realtime:latest|g' infrastructure/kubernetes/realtime-deployment.yaml
+        sed -i 's|image: .*|image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/worker:latest|g' infrastructure/kubernetes/worker-deployment.yaml
+        sed -i 's|image: .*|image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/frontend:latest|g' infrastructure/kubernetes/frontend-deployment.yaml
+
+        # Apply k8s manifests
+        kubectl apply -f infrastructure/kubernetes/
+
+        # Wait for rollout
+        kubectl rollout status deployment/sptinder-api
+        kubectl rollout status deployment/sptinder-realtime
+        kubectl rollout status deployment/sptinder-worker
+        kubectl rollout status deployment/sptinder-frontend
+
+  deploy-production:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    environment: production
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure kubectl
+      uses: azure/k8s-set-context@v3
+      with:
+        method: kubeconfig
+        kubeconfig: ${{ secrets.KUBE_CONFIG_PRODUCTION }}
+
+    - name: Deploy to production
+      run: |
+        # Update images in k8s manifests
+        sed -i 's|image: .*|image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/api:latest|g' infrastructure/kubernetes/api-deployment.yaml
+        sed -i 's|image: .*|image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/realtime:latest|g' infrastructure/kubernetes/realtime-deployment.yaml
+        sed -i 's|image: .*|image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/worker:latest|g' infrastructure/kubernetes/worker-deployment.yaml
+        sed -i 's|image: .*|image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/frontend:latest|g' infrastructure/kubernetes/frontend-deployment.yaml
+
+        # Apply k8s manifests
+        kubectl apply -f infrastructure/kubernetes/
+
+        # Wait for rollout
+        kubectl rollout status deployment/sptinder-api
+        kubectl rollout status deployment/sptinder-realtime
+        kubectl rollout status deployment/sptinder-worker
+        kubectl rollout status deployment/sptinder-frontend
+
+    - name: Run database migrations
+      run: |
+        kubectl exec -it deployment/sptinder-api -- npm run migrate
+
+    - name: Health check
+      run: |
+        # Wait for services to be ready
+        sleep 30
+
+        # Check API health
+        kubectl exec deployment/sptinder-api -- curl -f http://localhost:4000/health
+
+        # Check frontend
+        kubectl exec deployment/sptinder-frontend -- curl -f http://localhost:3000

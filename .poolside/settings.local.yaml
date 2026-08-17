@@ -1,0 +1,24 @@
+tools:
+    shell:
+        allow:
+            - cd *
+            - npm install *
+            - npm run *
+            - head *
+            - rm *
+            - npm view *
+            - tail *
+            - mkdir *
+            - ls *
+            - cat *
+            - docker-compose up *
+            - sleep 3
+            - echo *
+            - sleep 5
+            - curl *
+            - node *
+            - wc *
+            - npx tsc *
+            - git status *
+            - git add *
+            - git commit *

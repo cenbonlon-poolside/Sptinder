@@ -1,0 +1,111 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-sptinder
+  labels:
+    app: grafana
+data:
+  sptinder-dashboard.json: |
+    {
+      "dashboard": {
+        "id": null,
+        "title": "Sptinder Application Dashboard",
+        "tags": ["sptinder"],
+        "timezone": "browser",
+        "panels": [
+          {
+            "id": 1,
+            "title": "API Response Time",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{job=\"sptinder-api\"}[5m]))",
+                "legendFormat": "95th percentile"
+              },
+              {
+                "expr": "histogram_quantile(0.50, rate(http_request_duration_seconds_bucket{job=\"sptinder-api\"}[5m]))",
+                "legendFormat": "50th percentile"
+              }
+            ]
+          },
+          {
+            "id": 2,
+            "title": "API Request Rate",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "rate(http_requests_total{job=\"sptinder-api\"}[5m])",
+                "legendFormat": "Requests per second"
+              }
+            ]
+          },
+          {
+            "id": 3,
+            "title": "Real-time Connections",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "websocket_connections_active{job=\"sptinder-realtime\"}",
+                "legendFormat": "Active connections"
+              }
+            ]
+          },
+          {
+            "id": 4,
+            "title": "Database Connection Pool",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "db_connections_active{job=\"sptinder-api\"}",
+                "legendFormat": "Active connections"
+              },
+              {
+                "expr": "db_connections_idle{job=\"sptinder-api\"}",
+                "legendFormat": "Idle connections"
+              }
+            ]
+          },
+          {
+            "id": 5,
+            "title": "Memory Usage",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "process_resident_memory_bytes{job=~\"sptinder-.*\"}",
+                "legendFormat": "{{ job }}"
+              }
+            ]
+          },
+          {
+            "id": 6,
+            "title": "CPU Usage",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "rate(process_cpu_user_seconds_total{job=~\"sptinder-.*\"}[5m])",
+                "legendFormat": "{{ job }} user"
+              },
+              {
+                "expr": "rate(process_cpu_system_seconds_total{job=~\"sptinder-.*\"}[5m])",
+                "legendFormat": "{{ job }} system"
+              }
+            ]
+          }
+        ],
+        "time": {
+          "from": "now-1h",
+          "to": "now"
+        },
+        "timepicker": {},
+        "templating": {
+          "list": []
+        },
+        "annotations": {
+          "list": []
+        },
+        "refresh": "5s",
+        "schemaVersion": 16,
+        "version": 0,
+        "links": []
+      }
+    }

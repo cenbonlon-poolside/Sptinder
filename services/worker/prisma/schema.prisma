@@ -1,0 +1,184 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                String   @id @default(cuid())
+  spotifyId         String   @unique
+  email             String?  @unique
+  displayName       String?
+  profileImageUrl   String?
+  country           String?
+  spotifyAccessToken  String?
+  spotifyRefreshToken String?
+  tokenExpiresAt    DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  // Relations
+  swipes            Swipe[]
+  matches           Match[]
+  userMatches       Match[]  @relation("UserMatches")
+  chatMessages      ChatMessage[]
+  playlists         Playlist[]
+  collaborativePlaylists CollaborativePlaylist[]
+  recommendations    Recommendation[]
+
+  @@map("users")
+}
+
+model Song {
+  id          String   @id @default(cuid())
+  spotifyId   String   @unique
+  name        String
+  artist      String
+  album       String
+  imageUrl    String?
+  previewUrl  String?
+  externalUrl String
+  durationMs  Int
+  popularity  Int?
+  genres      String[] // JSON array of genres
+  audioFeatures AudioFeatures?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  swipes      Swipe[]
+  recommendations Recommendation[]
+
+  @@map("songs")
+}
+
+model AudioFeatures {
+  id            String  @id @default(cuid())
+  songId        String  @unique
+  danceability  Float
+  energy        Float
+  key           Int
+  loudness      Float
+  mode          Int
+  speechiness   Float
+  acousticness  Float
+  instrumentalness Float
+  liveness      Float
+  valence       Float
+  tempo         Float
+  timeSignature Int
+  createdAt     DateTime @default(now())
+
+  // Relations
+  song          Song    @relation(fields: [songId], references: [id], onDelete: Cascade)
+
+  @@map("audio_features")
+}
+
+model Swipe {
+  id        String   @id @default(cuid())
+  userId    String
+  songId    String
+  action    String   // 'like' or 'pass'
+  createdAt DateTime @default(now())
+
+  // Relations
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  song      Song     @relation(fields: [songId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, songId])
+  @@map("swipes")
+}
+
+model Match {
+  id          String   @id @default(cuid())
+  userId      String
+  matchedUserId String
+  createdAt   DateTime @default(now())
+
+  // Relations
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  matchedUser User     @relation("UserMatches", fields: [matchedUserId], references: [id], onDelete: Cascade)
+  chatMessages ChatMessage[]
+  collaborativePlaylists CollaborativePlaylist[]
+
+  @@unique([userId, matchedUserId])
+  @@map("matches")
+}
+
+model ChatMessage {
+  id        String   @id @default(cuid())
+  matchId   String
+  senderId  String
+  content   String
+  messageType String @default("text") // 'text', 'song', 'playlist'
+  metadata  Json?    // Additional data for songs/playlists
+  readAt    DateTime?
+  createdAt DateTime @default(now())
+
+  // Relations
+  match     Match    @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  sender    User     @relation(fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@map("chat_messages")
+}
+
+model Playlist {
+  id          String   @id @default(cuid())
+  spotifyId   String   @unique
+  name        String
+  description String?
+  imageUrl    String?
+  externalUrl String
+  ownerId     String
+  isPublic    Boolean  @default(false)
+  trackCount  Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  owner       User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@map("playlists")
+}
+
+model CollaborativePlaylist {
+  id          String   @id @default(cuid())
+  matchId     String
+  spotifyId   String   @unique
+  name        String
+  description String?
+  trackCount  Int      @default(0)
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  match       Match    @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  createdBy   User     @relation(fields: [createdById], references: [id], onDelete: Cascade)
+
+  @@map("collaborative_playlists")
+}
+
+model Recommendation {
+  id              String   @id @default(cuid())
+  userId          String
+  songId          String
+  score           Float    // Recommendation score (0-1)
+  reason          String   // Why this song was recommended
+  algorithm       String   // Which algorithm generated this recommendation
+  createdAt       DateTime @default(now())
+
+  // Relations
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  song            Song     @relation(fields: [songId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, songId])
+  @@map("recommendations")
+}

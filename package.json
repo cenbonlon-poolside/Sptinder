@@ -1,0 +1,38 @@
+{
+  "name": "sptinder",
+  "version": "1.0.0",
+  "description": "Spotify-style swipe discovery app - swipe tracks to build playlists",
+  "main": "index.js",
+  "scripts": {
+    "dev": "docker-compose up",
+    "dev:api": "cd apps/api && npm run dev",
+    "dev:web": "cd apps/web && npm run dev",
+    "build": "cd apps/api && npm run build && cd ../web && npm run build",
+    "build:api": "cd apps/api && npm run build",
+    "build:web": "cd apps/web && npm run build",
+    "test": "cd apps/api && npm run test && cd ../web && npm run test",
+    "test:api": "cd apps/api && npm run test",
+    "test:web": "cd apps/web && npm run test",
+    "lint": "cd apps/api && npm run lint && cd ../web && npm run lint",
+    "lint:api": "cd apps/api && npm run lint",
+    "lint:web": "cd apps/web && npm run lint",
+    "typecheck": "cd apps/api && npx tsc --noEmit"
+  },
+  "keywords": [
+    "spotify",
+    "music",
+    "swipe",
+    "playlist",
+    "fastify"
+  ],
+  "author": "Sptinder Team",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.5.0"
+  },
+  "engines": {
+    "node": "22.x",
+    "npm": ">=10.0.0"
+  }
+}
