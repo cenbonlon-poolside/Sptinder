@@ -198,20 +198,13 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
     const profile = (await profileResponse.json()) as SpotifyProfile;
 
     let user;
-    try {
-      // Use direct query to get all columns including accessToken
-      user = await db.query.users.findFirst({
-        where: eq(users.spotifyId, profile.id),
-      });
-    } catch {
-      // Fallback: use direct query if db.query fails
-      const result = await db
-        .select()
-        .from(users)
-        .where(eq(users.spotifyId, profile.id))
-        .limit(1);
-      user = result[0] || null;
-    }
+    // Use direct query to get all columns including accessToken
+    const result = await db
+      .select()
+      .from(users)
+      .where(eq(users.spotifyId, profile.id))
+      .limit(1);
+    user = result[0] || null;
 
     if (!user) {
       let result;
