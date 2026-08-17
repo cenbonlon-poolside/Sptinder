@@ -22,10 +22,14 @@ function App() {
 
   useEffect(() => {
     // Check for error from redirect
-    const urlParams = new URLSearchParams(window.location.search);
-    const errorParam = urlParams.get('error');
-    if (errorParam) {
-      setError(decodeURIComponent(errorParam));
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      const errorParam = urlParams.get('error');
+      if (errorParam) {
+        setError(decodeURIComponent(errorParam));
+      }
+    } catch (err) {
+      console.error('URL params parse error:', err);
     }
     
     checkAuth();
@@ -38,7 +42,8 @@ function App() {
         credentials: 'include',
       });
       setAuthenticated(response.ok);
-    } catch {
+    } catch (err) {
+      console.error('Auth check failed:', err);
       setAuthenticated(false);
     }
   };
@@ -78,6 +83,7 @@ function App() {
   };
 
   const handleLogin = () => {
+    console.log('Login button clicked');
     window.location.href = `${API_BASE}/api/auth/login`;
   };
 
