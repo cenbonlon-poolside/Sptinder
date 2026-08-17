@@ -163,12 +163,12 @@ async function fetchAndStoreTracks(userId: string): Promise<Track[] | { error: s
   }
 
   // Use Search API which works for development mode apps
+  // Query without year restriction for better results on new apps
   const randomGenre = DISCOVERY_GENRES[Math.floor(Math.random() * DISCOVERY_GENRES.length)];
   const params = new URLSearchParams({
-    q: `genre:${randomGenre} year:2024`,
+    q: `genre:${randomGenre}`,
     type: 'track',
     limit: '50',
-    market: 'US',
   });
 
   const searchResponse = await fetch(`${SPOTIFY_API_URL}/search?${params}`, {
