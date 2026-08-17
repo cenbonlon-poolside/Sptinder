@@ -135,8 +135,11 @@ async function fetchAndStoreTracks(userId: string): Promise<Track[] | { error: s
   };
 
   let accessToken = userRecord.accessToken;
+  console.log('Initial accessToken value:', accessToken ? 'present' : 'null/undefined', 'type:', typeof accessToken);
+  
   // Check if we need to refresh the access token
   const needsRefresh = !accessToken || (userRecord?.tokenExpiry && new Date(userRecord.tokenExpiry) < new Date());
+  console.log('needsRefresh:', needsRefresh, 'tokenExpiry:', userRecord?.tokenExpiry);
   
   if (needsRefresh) {
     console.log('Access token expired or missing, refreshing...');
@@ -206,6 +209,8 @@ async function fetchAndStoreTracks(userId: string): Promise<Track[] | { error: s
 
   if (spotifyTracks.length === 0) {
     console.error('All search queries failed, returning empty');
+    console.error('This means the Spotify Search API is not returning results for any query');
+    console.error('Possible causes: 1) No tracks match, 2) Access token invalid, 3) API rate limited');
     return [];
   }
 
