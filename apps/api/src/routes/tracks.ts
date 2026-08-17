@@ -2,14 +2,73 @@ import { FastifyPluginAsync, FastifyRequest } from 'fastify';
 import { db } from '../db/index.js';
 import { tracks, users, swipes } from '../db/schema.js';
 import { eq, notInArray } from 'drizzle-orm';
+import crypto from 'crypto';
 
 const SPOTIFY_API_URL = 'https://api.spotify.com/v1';
+const SPOTIFY_TOKEN_URL = 'https://accounts.spotify.com/api/token';
 
 // Genre seeds for track discovery
 const DISCOVERY_GENRES = [
   'pop', 'rock', 'hip-hop', 'electronic', 'indie',
   'alternative', 'dance', 'country', 'r-n-b', 'jazz'
 ];
+
+// Decrypt refresh token (for token refresh)
+function decrypt(text: string, key: string): string {
+  const parts = text.split(':');
+  if (parts.length !== 3) return '';
+  const [ivHex, encrypted, authTagHex] = parts;
+  const decipher = crypto.createDecipheriv(
+    'aes-256-gcm',
+    Buffer.from(key),
+    Buffer.from(ivHex, 'hex')
+  );
+  decipher.setAuthTag(Buffer.from(authTagHex, 'hex'));
+  let decrypted = decipher.update(encrypted, 'hex', 'utf8');
+  decrypted += decipher.final('utf8');
+  return decrypted;
+}
+
+// Refresh access token using stored refresh token
+async function refreshAccessToken(refreshToken: string): Promise<{
+  accessToken: string;
+  expiresIn: number;
+} | null> {
+  const env = {
+    SPOTIFY_CLIENT_ID: process.env.SPOTIFY_CLIENT_ID!,
+    SPOTIFY_CLIENT_SECRET: process.env.SPOTIFY_CLIENT_SECRET!,
+    ENCRYPTION_KEY: process.env.ENCRYPTION_KEY!,
+  };
+
+  const response = await fetch(SPOTIFY_TOKEN_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body: new URLSearchParams({
+      client_id: env.SPOTIFY_CLIENT_ID,
+      client_secret: env.SPOTIFY_CLIENT_SECRET,
+      grant_type: 'refresh_token',
+      refresh_token: refreshToken,
+    }),
+  });
+
+  if (!response.ok) {
+    console.error('Token refresh failed:', response.status);
+    return null;
+  }
+
+  const tokens = (await response.json()) as {
+    access_token: string;
+    refresh_token?: string;
+    expires_in: number;
+  };
+
+  return {
+    accessToken: tokens.access_token,
+    expiresIn: tokens.expires_in,
+  };
+}
 
 interface Track {
   id: string;
@@ -78,12 +137,42 @@ const trackRoutes: FastifyPluginAsync = async (fastify) => {
       .where(eq(users.id, userId))
       .limit(1);
     
-    const userRecord = result[0] || null;
-    console.log('userRecord found:', !!userRecord, 'accessToken:', !!userRecord?.accessToken);
+    let userRecord = result[0] || null;
+    console.log('userRecord found:', !!userRecord, 'accessToken:', !!userRecord?.accessToken, 'tokenExpiry:', userRecord?.tokenExpiry);
 
-    if (!userRecord?.accessToken) {
-      console.log('No access token, returning empty');
+    if (!userRecord?.accessToken && !userRecord?.refreshToken) {
+      console.log('No tokens, returning empty');
       return [];
+    }
+
+    // Get fresh access token - refresh if needed
+    let accessToken = userRecord.accessToken;
+    const env = {
+      SPOTIFY_CLIENT_ID: process.env.SPOTIFY_CLIENT_ID!,
+      SPOTIFY_CLIENT_SECRET: process.env.SPOTIFY_CLIENT_SECRET!,
+      ENCRYPTION_KEY: process.env.ENCRYPTION_KEY!,
+    };
+
+    if (!accessToken || (userRecord.tokenExpiry && new Date(userRecord.tokenExpiry) < new Date())) {
+      console.log('Access token expired or missing, refreshing...');
+      if (userRecord.refreshToken) {
+        const decryptedRefreshToken = decrypt(userRecord.refreshToken, env.ENCRYPTION_KEY);
+        const refreshed = await refreshAccessToken(decryptedRefreshToken);
+        if (refreshed) {
+          accessToken = refreshed.accessToken;
+          // Update user with new token
+          await db
+            .update(users)
+            .set({
+              accessToken: refreshed.accessToken,
+              tokenExpiry: new Date(Date.now() + refreshed.expiresIn * 1000),
+            })
+            .where(eq(users.id, userId));
+        } else {
+          console.log('Token refresh failed, returning empty');
+          return [];
+        }
+      }
     }
 
     // Use Search API which works for development mode apps
@@ -97,7 +186,7 @@ const trackRoutes: FastifyPluginAsync = async (fastify) => {
 
     const searchResponse = await fetch(`${SPOTIFY_API_URL}/search?${params}`, {
       headers: {
-        Authorization: `Bearer ${userRecord.accessToken}`,
+        Authorization: `Bearer ${accessToken}`,
       },
     });
 
