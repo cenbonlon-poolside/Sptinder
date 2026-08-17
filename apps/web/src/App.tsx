@@ -95,7 +95,14 @@ function App() {
       });
       if (response.ok) {
         const data = await response.json();
-        setTrack(data.tracks?.[0] ?? null);
+        // Check for reauth_required error
+        if (data.error === 'reauth_required') {
+          setError('Please log in again');
+          localStorage.removeItem('authToken');
+          setAuthenticated(false);
+        } else {
+          setTrack(data.tracks?.[0] ?? null);
+        }
       } else {
         console.log('Fetch track not ok:', response.status);
       }
