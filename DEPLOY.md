@@ -1,42 +1,50 @@
 # Deploy Sptinder to Render.com (Free tier)
 
-## ✅ Automatic Deployment with render.yaml
+## ✅ Two-Step Deployment
 
 **Repository:** https://github.com/cenbonlon-poolside/Sptinder
 
-The `render.yaml` file is already in the repo and will auto-configure both services.
-
-### Step 1: Deploy from render.yaml
+### Step 1: Deploy API via Blueprint
 
 1. Go to https://dashboard.render.com → "New +" → "Blueprint"
-2. Connect your GitHub account
-3. Select `cenbonlon-poolside/Sptinder`
-4. Render will auto-detect `render.yaml` and propose both services
+2. Select `cenbonlon-poolside/Sptinder`
+3. Deploy the `sptinder-api` service (defined in `render.yaml`)
 
-### Step 2: Add PostgreSQL Database
+### Step 2: Add Secrets to API Service
+
+In `sptinder-api` → Environment, add:
+```
+SPOTIFY_CLIENT_ID = 08bb68f750b84bee90a3327e147d8dca
+SPOTIFY_CLIENT_SECRET = 8aae39d92fa4475dbf1126dd6147c7a5
+JWT_SECRET = Wz3xQ9KmNp2RvT8YhB4fLdJ6sA1cE5gI
+ENCRYPTION_KEY = 3hLjWqZ6tvMLXGTNaCeyKEXFk27yoNyM
+```
+
+### Step 3: Add PostgreSQL Database
 
 1. Click **"New +" → "PostgreSQL"**
-2. Name: `sptinder-db`
-3. Region: Ohio
-4. Plan: Free
+2. Name: `sptinder-db`, Region: Ohio, Plan: Free
+3. Copy connection string to `DATABASE_URL` in `sptinder-api`
 
-### Step 3: Connect Database to API
+### Step 4: Deploy Web Frontend (Static Site)
 
-1. Go to your `sptinder-api` service → Environment
-2. Add variable: `DATABASE_URL` = (paste the connection string from PostgreSQL)
-3. Redeploy the service
+1. Click **"New +" → "Static Site"**
+2. Repository: `cenbonlon-poolside/Sptinder`
+3. Configure:
+   - Name: `sptinder-web`
+   - Root Directory: `apps/web`
+   - Build Command: `npm install && npm run build`
+   - Publish Directory: `dist`
 
-### Step 4: Update Spotify Redirect URI
+### Step 5: Update Spotify Redirect URI
 
 In Spotify Developer Dashboard:
 ```
 https://sptinder-api.onrender.com/auth/callback
 ```
 
-### Done!
+## Done!
 
-Your app will be available at:
+Your app will be at:
 - **Frontend:** https://sptinder-web.onrender.com
 - **API:** https://sptinder-api.onrender.com
-
-Click "Login with Spotify" and start swiping!
