@@ -20,6 +20,21 @@ function App() {
   const [authenticated, setAuthenticated] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Read token from URL hash fragment (set by callback after OAuth)
+  // This bypasses Chrome's bounce tracking protection on httpOnly cookies
+  useEffect(() => {
+    const hash = window.location.hash.slice(1); // Remove #
+    const hashParams = new URLSearchParams(hash);
+    const token = hashParams.get('token');
+    
+    if (token) {
+      // Store token in localStorage to persist
+      localStorage.setItem('authToken', token);
+      // Clear the hash from URL
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  }, []);
+  
   // DEBUG: Show alert on first render
   useEffect(() => {
     console.log('App mounted, authenticated:', authenticated);
