@@ -310,23 +310,25 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
     try {
       const decoded = fastify.jwt.verify(token) as { userId: string };
       
-      const user = await db.query.users.findFirst({
-        where: eq(users.id, decoded.userId),
-      });
+      const user = await db
+        .select()
+        .from(users)
+        .where(eq(users.id, decoded.userId))
+        .limit(1);
 
-      if (!user) {
+      if (!user?.length || !user[0]) {
         return reply.status(404).send({ error: 'User not found' });
       }
 
       return {
         user: {
-          id: user.id,
-          spotifyId: user.spotifyId,
-          email: user.email,
-          displayName: user.displayName,
-          hasAccessToken: !!user.accessToken,
-          hasRefreshToken: !!user.refreshToken,
-          tokenExpiry: user.tokenExpiry,
+          id: user[0].id,
+          spotifyId: user[0].spotifyId,
+          email: user[0].email,
+          displayName: user[0].displayName,
+          hasAccessToken: !!user[0].accessToken,
+          hasRefreshToken: !!user[0].refreshToken,
+          tokenExpiry: user[0].tokenExpiry,
         },
       };
     } catch (err) {
