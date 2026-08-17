@@ -4,13 +4,16 @@
 .env.*.local
 
 # Build outputs
-dist/
-build/
+**/dist/
+**/build/
 node_modules/
 
 # Logs
 *.log
 logs/
+
+# Database
+**/*.db
 
 # IDE
 .vscode/
