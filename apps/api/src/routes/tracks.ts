@@ -152,23 +152,24 @@ const trackRoutes: FastifyPluginAsync = async (fastify) => {
     let userRecord = result[0] || null;
     console.log('userRecord found:', !!userRecord, 'accessToken:', !!userRecord?.accessToken, 'tokenExpiry:', userRecord?.tokenExpiry, 'hasRefresh:', !!userRecord?.refreshToken);
 
-    let accessToken = userRecord?.accessToken || null;
+    // If refresh token is missing, user needs to re-authenticate
+    if (!userRecord?.refreshToken) {
+      console.log('No refresh token - user needs fresh login');
+      return [];
+    }
+
     const env = {
       SPOTIFY_CLIENT_ID: process.env.SPOTIFY_CLIENT_ID!,
       SPOTIFY_CLIENT_SECRET: process.env.SPOTIFY_CLIENT_SECRET!,
       ENCRYPTION_KEY: process.env.ENCRYPTION_KEY!,
     };
 
+    let accessToken = userRecord.accessToken;
     // Check if we need to refresh the access token
     const needsRefresh = !accessToken || (userRecord?.tokenExpiry && new Date(userRecord.tokenExpiry) < new Date());
     
     if (needsRefresh) {
       console.log('Access token expired or missing, refreshing...');
-      
-      if (!userRecord?.refreshToken) {
-        console.log('No refresh token available - user needs to re-login');
-        return [];
-      }
       
       const decryptedRefreshToken = decrypt(userRecord.refreshToken, env.ENCRYPTION_KEY);
       console.log('Attempting to refresh with decrypt check:', decryptedRefreshToken ? 'token present' : 'empty');

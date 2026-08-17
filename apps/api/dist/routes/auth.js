@@ -131,7 +131,8 @@ const authRoutes = async (fastify) => {
         if (!tokenResponse.ok) {
             const errorBody = await tokenResponse.text();
             console.error('Token exchange failed:', tokenResponse.status, errorBody);
-            return reply.status(400).send({ error: 'Token exchange failed', details: { status: tokenResponse.status, body: errorBody } });
+            const redirectUrl = process.env.FRONTEND_URL || 'https://sptinder-web.onrender.com';
+            return reply.redirect(`${redirectUrl}?error=${encodeURIComponent('Authentication failed: invalid_grant')}`);
         }
         const tokens = (await tokenResponse.json());
         const profileResponse = await fetch(SPOTIFY_PROFILE_URL, {
@@ -147,35 +148,71 @@ const authRoutes = async (fastify) => {
             return reply.redirect(`${redirectUrl}?error=${encodeURIComponent(errorBody)}`);
         }
         const profile = (await profileResponse.json());
-        let user = await db.query.users.findFirst({
-            where: eq(users.spotifyId, profile.id),
-        });
+        let user;
+        // Use direct query to get all columns including accessToken
+        const result = await db
+            .select()
+            .from(users)
+            .where(eq(users.spotifyId, profile.id))
+            .limit(1);
+        user = result[0] || null;
         if (!user) {
-            const [newUser] = await db
-                .insert(users)
-                .values({
-                spotifyId: profile.id,
-                email: profile.email,
-                displayName: profile.display_name,
-                refreshToken: encrypt(tokens.refresh_token, env.ENCRYPTION_KEY),
-                accessToken: tokens.access_token,
-                tokenExpiry: new Date(Date.now() + tokens.expires_in * 1000),
-            })
-                .returning();
-            user = newUser;
+            console.log('Creating new user for spotifyId:', profile.id);
+            let result;
+            try {
+                result = await db
+                    .insert(users)
+                    .values({
+                    spotifyId: profile.id,
+                    email: profile.email,
+                    displayName: profile.display_name,
+                    refreshToken: encrypt(tokens.refresh_token, env.ENCRYPTION_KEY),
+                    accessToken: tokens.access_token,
+                    tokenExpiry: new Date(Date.now() + tokens.expires_in * 1000),
+                })
+                    .returning();
+            }
+            catch {
+                result = await db
+                    .insert(users)
+                    .values({
+                    spotifyId: profile.id,
+                    email: profile.email,
+                    displayName: profile.display_name,
+                    refreshToken: encrypt(tokens.refresh_token, env.ENCRYPTION_KEY),
+                    accessToken: tokens.access_token,
+                    tokenExpiry: new Date(Date.now() + tokens.expires_in * 1000),
+                })
+                    .returning();
+            }
+            user = result[0];
         }
         else {
-            await db
-                .update(users)
-                .set({
-                refreshToken: encrypt(tokens.refresh_token, env.ENCRYPTION_KEY),
-                accessToken: tokens.access_token,
-                tokenExpiry: new Date(Date.now() + tokens.expires_in * 1000),
-            })
-                .where(eq(users.id, user.id));
+            console.log('Updating existing user, spotifyId:', profile.id, 'userId:', user.id);
+            try {
+                await db
+                    .update(users)
+                    .set({
+                    refreshToken: encrypt(tokens.refresh_token, env.ENCRYPTION_KEY),
+                    accessToken: tokens.access_token,
+                    tokenExpiry: new Date(Date.now() + tokens.expires_in * 1000),
+                })
+                    .where(eq(users.id, user.id));
+                // Fetch the updated user to verify
+                const updated = await db
+                    .select()
+                    .from(users)
+                    .where(eq(users.id, user.id))
+                    .limit(1);
+                console.log('User updated, has accessToken:', !!updated[0]?.accessToken, 'has refreshToken:', !!updated[0]?.refreshToken);
+            }
+            catch (err) {
+                console.error('Update failed:', err);
+            }
         }
         const token = fastify.jwt.sign({ userId: user.id, spotifyId: user.spotifyId });
         // Redirect to web frontend after successful login
+        // Pass token in URL fragment to avoid Chrome bounce tracking blocking httpOnly cookies
         reply
             .clearCookie('spotify_verifier')
             .clearCookie('spotify_state')
@@ -186,7 +223,7 @@ const authRoutes = async (fastify) => {
             maxAge: 60 * 60 * 24 * 7,
         });
         const redirectUrl = process.env.FRONTEND_URL || 'https://sptinder-web.onrender.com';
-        return reply.redirect(redirectUrl);
+        return reply.redirect(`${redirectUrl}/#token=${token}`);
     });
     fastify.get('/me', {
         onRequest: [fastify.authenticate],
@@ -206,6 +243,34 @@ const authRoutes = async (fastify) => {
                 },
             };
         },
+    });
+    // Verify token from Authorization header (for Chrome bounce tracking workaround)
+    fastify.get('/verify-token', async (request, reply) => {
+        const authHeader = request.headers.authorization;
+        if (!authHeader?.startsWith('Bearer ')) {
+            return reply.status(401).send({ error: 'No token provided' });
+        }
+        const token = authHeader.slice(7);
+        try {
+            const decoded = fastify.jwt.verify(token);
+            const user = await db.query.users.findFirst({
+                where: eq(users.id, decoded.userId),
+            });
+            if (!user) {
+                return reply.status(404).send({ error: 'User not found' });
+            }
+            return {
+                user: {
+                    id: user.id,
+                    spotifyId: user.spotifyId,
+                    email: user.email,
+                    displayName: user.displayName,
+                },
+            };
+        }
+        catch (err) {
+            return reply.status(401).send({ error: 'Invalid token' });
+        }
     });
 };
 export default authRoutes;
