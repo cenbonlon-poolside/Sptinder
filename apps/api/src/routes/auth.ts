@@ -175,7 +175,8 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
     if (!tokenResponse.ok) {
       const errorBody = await tokenResponse.text();
       console.error('Token exchange failed:', tokenResponse.status, errorBody);
-      return reply.status(400).send({ error: 'Token exchange failed', details: { status: tokenResponse.status, body: errorBody } });
+      const redirectUrl = process.env.FRONTEND_URL || 'https://sptinder-web.onrender.com';
+      return reply.redirect(`${redirectUrl}?error=${encodeURIComponent('Authentication failed: invalid_grant')}`);
     }
 
     const tokens = (await tokenResponse.json()) as SpotifyTokenResponse;
