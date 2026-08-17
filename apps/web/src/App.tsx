@@ -16,7 +16,7 @@ const API_BASE = import.meta.env.VITE_API_URL ?? 'https://sptinder-api.onrender.
 
 function App() {
   const [track, setTrack] = useState<Track | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [authenticated, setAuthenticated] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -33,7 +33,6 @@ function App() {
     }
     
     checkAuth();
-    fetchTrack();
   }, []);
 
   const checkAuth = async () => {
@@ -42,6 +41,9 @@ function App() {
         credentials: 'include',
       });
       setAuthenticated(response.ok);
+      if (response.ok) {
+        fetchTrack();
+      }
     } catch (err) {
       console.error('Auth check failed:', err);
       setAuthenticated(false);
@@ -57,6 +59,8 @@ function App() {
       if (response.ok) {
         const data = await response.json();
         setTrack(data.tracks?.[0] ?? null);
+      } else {
+        console.log('Fetch track not ok:', response.status);
       }
     } catch (err) {
       console.error('Failed to fetch track:', err);
