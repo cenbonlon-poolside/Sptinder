@@ -167,7 +167,9 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
     });
 
     if (!tokenResponse.ok) {
-      return reply.status(400).send({ error: 'Token exchange failed' });
+      const errorBody = await tokenResponse.text();
+      console.error('Token exchange failed:', tokenResponse.status, errorBody);
+      return reply.status(400).send({ error: 'Token exchange failed', details: { status: tokenResponse.status, body: errorBody } });
     }
 
     const tokens = (await tokenResponse.json()) as SpotifyTokenResponse;
@@ -179,7 +181,9 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
     });
 
     if (!profileResponse.ok) {
-      return reply.status(400).send({ error: 'Failed to fetch profile' });
+      const errorBody = await profileResponse.text();
+      console.error('Profile fetch failed:', profileResponse.status, errorBody);
+      return reply.status(400).send({ error: 'Failed to fetch profile', details: { status: profileResponse.status, body: errorBody } });
     }
 
     const profile = (await profileResponse.json()) as SpotifyProfile;
