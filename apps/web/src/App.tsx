@@ -20,6 +20,8 @@ function App() {
   const [authenticated, setAuthenticated] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  console.log('App rendering, state:', { authenticated, loading, hasTrack: !!track });
+
   useEffect(() => {
     // Check for error from redirect
     try {
