@@ -224,6 +224,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
 
     const token = fastify.jwt.sign({ userId: user.id, spotifyId: user.spotifyId });
 
+    // Redirect to web frontend after successful login
     reply
       .clearCookie('spotify_verifier')
       .clearCookie('spotify_state')
@@ -232,8 +233,10 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
         secure: true,
         sameSite: 'lax',
         maxAge: 60 * 60 * 24 * 7,
-      })
-      .send({ success: true });
+      });
+    
+    const redirectUrl = process.env.FRONTEND_URL || 'https://sptinder-web.onrender.com';
+    return reply.redirect(redirectUrl);
   });
 
   fastify.get('/me', {
