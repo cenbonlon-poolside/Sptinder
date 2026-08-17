@@ -142,7 +142,8 @@ const authRoutes = async (fastify) => {
         if (!profileResponse.ok) {
             const errorBody = await profileResponse.text();
             console.error('Profile fetch failed:', profileResponse.status, errorBody);
-            return reply.status(400).send({ error: 'Failed to fetch profile', details: { status: profileResponse.status, body: errorBody } });
+            const redirectUrl = process.env.FRONTEND_URL || 'https://sptinder-web.onrender.com';
+            return reply.redirect(`${redirectUrl}?error=${encodeURIComponent('Failed to fetch profile')}`);
         }
         const profile = (await profileResponse.json());
         let user = await db.query.users.findFirst({
