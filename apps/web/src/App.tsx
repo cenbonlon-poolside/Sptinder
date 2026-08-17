@@ -12,7 +12,7 @@ type Track = {
   popularity: number | null;
 };
 
-const API_BASE = import.meta.env.VITE_API_BASE ?? '';
+const API_BASE = import.meta.env.VITE_API_URL ?? '';
 
 function App() {
   const [track, setTrack] = useState<Track | null>(null);
