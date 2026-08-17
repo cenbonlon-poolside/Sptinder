@@ -66,9 +66,19 @@ function App() {
 
   const checkAuth = async () => {
     try {
-      const response = await fetch(`${API_BASE}/api/auth/me`, {
+      // Check for token in localStorage first (bypasses Chrome bounce tracking)
+      const storedToken = localStorage.getItem('authToken');
+      
+      const endpoint = storedToken ? `${API_BASE}/api/verify-token` : `${API_BASE}/api/auth/me`;
+      const headers: Record<string, string> = storedToken 
+        ? { 'Authorization': `Bearer ${storedToken}` }
+        : {};
+      
+      const response = await fetch(endpoint, {
         credentials: 'include',
+        headers,
       });
+      
       setAuthenticated(response.ok);
       if (response.ok) {
         fetchTrack();

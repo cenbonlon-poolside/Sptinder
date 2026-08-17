@@ -290,6 +290,38 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       };
     },
   });
+
+  // Verify token from Authorization header (for Chrome bounce tracking workaround)
+  fastify.get('/verify-token', async (request, reply) => {
+    const authHeader = request.headers.authorization;
+    if (!authHeader?.startsWith('Bearer ')) {
+      return reply.status(401).send({ error: 'No token provided' });
+    }
+    
+    const token = authHeader.slice(7);
+    try {
+      const decoded = fastify.jwt.verify(token) as { userId: string };
+      
+      const user = await db.query.users.findFirst({
+        where: eq(users.id, decoded.userId),
+      });
+
+      if (!user) {
+        return reply.status(404).send({ error: 'User not found' });
+      }
+
+      return {
+        user: {
+          id: user.id,
+          spotifyId: user.spotifyId,
+          email: user.email,
+          displayName: user.displayName,
+        },
+      };
+    } catch (err) {
+      return reply.status(401).send({ error: 'Invalid token' });
+    }
+  });
 };
 
 export default authRoutes;
