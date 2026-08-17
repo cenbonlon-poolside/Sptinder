@@ -27,6 +27,13 @@ function App() {
   
   console.log('App rendering, state:', { authenticated, loading, hasTrack: !!track });
 
+  // Clear the #_=_ fragment that Spotify adds
+  useEffect(() => {
+    if (window.location.hash === '#_=_') {
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  }, []);
+
   useEffect(() => {
     // Check for error from redirect
     try {
