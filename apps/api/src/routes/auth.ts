@@ -186,11 +186,12 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       },
     });
 
+    console.log('Profile response status:', profileResponse.status);
     if (!profileResponse.ok) {
       const errorBody = await profileResponse.text();
       console.error('Profile fetch failed:', profileResponse.status, errorBody);
       const redirectUrl = process.env.FRONTEND_URL || 'https://sptinder-web.onrender.com';
-      return reply.redirect(`${redirectUrl}?error=${encodeURIComponent('Failed to fetch profile')}`);
+      return reply.redirect(`${redirectUrl}?error=${encodeURIComponent(errorBody)}`);
     }
 
     const profile = (await profileResponse.json()) as SpotifyProfile;
