@@ -2,9 +2,6 @@ import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import cookie from '@fastify/cookie';
 import jwt from '@fastify/jwt';
-import staticPlugin from '@fastify/static';
-import path from 'path';
-import { fileURLToPath } from 'url';
 import apiRoutes from './routes/index.js';
 function getEnv() {
     const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://localhost:5432/sptinder';
@@ -19,13 +16,12 @@ function getEnv() {
     };
 }
 const env = getEnv();
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
 async function buildServer() {
     const fastify = Fastify({
         logger: true,
     });
     await fastify.register(cors, {
-        origin: true,
+        origin: ['https://sptinder-web.onrender.com', 'http://localhost:5173'],
         credentials: true,
     });
     await fastify.register(cookie);
@@ -46,16 +42,7 @@ async function buildServer() {
     });
     // Health check
     fastify.get('/health', async () => ({ status: 'ok' }));
-    // Serve web frontend
-    await fastify.register(staticPlugin, {
-        root: path.join(__dirname, '../../web/dist'),
-        prefix: '/',
-    });
     await fastify.register(apiRoutes, { prefix: '/api' });
-    // Serve index.html for all non-API routes (SPA support)
-    fastify.setNotFoundHandler(async (_request, reply) => {
-        return reply.sendFile('index.html');
-    });
     return fastify;
 }
 async function start() {
