@@ -5,9 +5,20 @@ import jwt from '@fastify/jwt';
 import staticPlugin from '@fastify/static';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { validateEnv } from './env.js';
 import apiRoutes from './routes/index.js';
-const env = validateEnv();
+function getEnv() {
+    const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://localhost:5432/sptinder';
+    return {
+        SPOTIFY_CLIENT_ID: process.env.SPOTIFY_CLIENT_ID || '',
+        SPOTIFY_CLIENT_SECRET: process.env.SPOTIFY_CLIENT_SECRET || '',
+        DATABASE_URL,
+        JWT_SECRET: process.env.JWT_SECRET || 'dev-secret-please-change-in-production-min-32chars',
+        ENCRYPTION_KEY: process.env.ENCRYPTION_KEY || 'dev-encryption-key-32-chars!!',
+        PORT: Number(process.env.PORT || 3000),
+        NODE_ENV: (process.env.NODE_ENV || 'development'),
+    };
+}
+const env = getEnv();
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 async function buildServer() {
     const fastify = Fastify({
