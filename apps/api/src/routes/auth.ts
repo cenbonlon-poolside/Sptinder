@@ -28,7 +28,7 @@ function getRedirectUri(request: FastifyRequest): string {
   }
   const host = request.headers.host || 'localhost:3000';
   const protocol = request.headers['x-forwarded-proto'] || 'http';
-  return `${protocol}://${host}/auth/callback`;
+  return `${protocol}://${host}/api/auth/callback`;
 }
 
 function generateCodeVerifier(): string {
