@@ -206,12 +206,16 @@ const trackRoutes: FastifyPluginAsync = async (fastify) => {
       },
     });
 
+    console.log('Spotify search response status:', searchResponse.status);
+    
     if (!searchResponse.ok) {
-      console.error('Search failed:', searchResponse.status);
+      const errorText = await searchResponse.text();
+      console.error('Search failed:', searchResponse.status, errorText);
       return [];
     }
 
     const data = (await searchResponse.json()) as SpotifySearchResponse;
+    console.log('Spotify search returned tracks:', data.tracks?.items?.length || 0);
     const spotifyTracks = data.tracks.items;
 
     const newTracks = await db
