@@ -132,14 +132,18 @@ const trackRoutes: FastifyPluginAsync = async (fastify) => {
       });
 
       if (availableTracks.length === 0) {
-        availableTracks = await fetchAndStoreTracks(userId);
+        const result = await fetchAndStoreTracks(userId);
+        if ('error' in result) {
+          return result; // Return error object
+        }
+        availableTracks = result;
       }
 
       return { tracks: availableTracks };
     },
   );
 
-  async function fetchAndStoreTracks(userId: string): Promise<Track[]> {
+  async function fetchAndStoreTracks(userId: string): Promise<Track[] | { error: string }> {
     console.log('fetchAndStoreTracks called for userId:', userId);
     
     // Use direct query to ensure we get accessToken column
@@ -155,7 +159,7 @@ const trackRoutes: FastifyPluginAsync = async (fastify) => {
     // If refresh token is missing, user needs to re-authenticate
     if (!userRecord?.refreshToken) {
       console.log('No refresh token - user needs fresh login');
-      return [];
+      return { error: 'reauth_required' };
     }
 
     const env = {
