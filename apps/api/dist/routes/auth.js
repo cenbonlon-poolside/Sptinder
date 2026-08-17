@@ -103,7 +103,9 @@ const authRoutes = async (fastify) => {
         const redirectUri = getRedirectUri(request);
         const storedState = request.cookies['spotify_state'];
         const codeVerifier = request.cookies['spotify_verifier'];
+        console.log('Callback received - state:', state, 'stored:', storedState, 'verifier:', codeVerifier ? 'present' : 'missing');
         if (!storedState || storedState !== state) {
+            console.log('State mismatch - returning 400');
             return reply.status(400).send({ error: 'Invalid state' });
         }
         if (!codeVerifier) {
