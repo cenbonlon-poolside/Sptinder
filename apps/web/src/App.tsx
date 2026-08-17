@@ -92,8 +92,14 @@ function App() {
   const fetchTrack = async () => {
     setLoading(true);
     try {
+      const storedToken = localStorage.getItem('authToken');
+      const headers: Record<string, string> = storedToken 
+        ? { 'Authorization': `Bearer ${storedToken}` }
+        : {};
+      
       const response = await fetch(`${API_BASE}/api/tracks/next`, {
         credentials: 'include',
+        headers,
       });
       if (response.ok) {
         const data = await response.json();
@@ -112,9 +118,17 @@ function App() {
     if (!track) return;
 
     try {
+      const storedToken = localStorage.getItem('authToken');
+      const headers: Record<string, string> = storedToken 
+        ? { 'Authorization': `Bearer ${storedToken}` }
+        : {};
+
       await fetch(`${API_BASE}/api/swipes`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          ...headers,
+        },
         credentials: 'include',
         body: JSON.stringify({ trackId: track.id, direction }),
       });

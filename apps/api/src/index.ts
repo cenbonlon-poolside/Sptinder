@@ -111,6 +111,16 @@ async function buildServer() {
     'authenticate',
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
+        // Try Authorization header first (bypasses bounce tracking)
+        const authHeader = request.headers.authorization;
+        if (authHeader?.startsWith('Bearer ')) {
+          // Manually verify the token and attach to request
+          const token = authHeader.slice(7);
+          const decoded = fastify.jwt.verify(token) as { userId: string };
+          (request as any).user = decoded;
+          return;
+        }
+        // Fall back to cookie
         await request.jwtVerify();
       } catch (err) {
         reply.send(err);
