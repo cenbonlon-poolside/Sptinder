@@ -265,12 +265,32 @@ const authRoutes = async (fastify) => {
                     spotifyId: user.spotifyId,
                     email: user.email,
                     displayName: user.displayName,
+                    hasAccessToken: !!user.accessToken,
+                    hasRefreshToken: !!user.refreshToken,
+                    tokenExpiry: user.tokenExpiry,
                 },
             };
         }
         catch (err) {
             return reply.status(401).send({ error: 'Invalid token' });
         }
+    });
+    // Force re-auth by clearing tokens (for debugging)
+    fastify.post('/logout', {
+        onRequest: [fastify.authenticate],
+        handler: async (request, reply) => {
+            const userId = request.user.userId;
+            await db
+                .update(users)
+                .set({
+                accessToken: null,
+                refreshToken: null,
+                tokenExpiry: null,
+            })
+                .where(eq(users.id, userId));
+            // Clear auth token from localStorage on frontend
+            return { success: true, message: 'Logged out - please re-login' };
+        },
     });
 };
 export default authRoutes;

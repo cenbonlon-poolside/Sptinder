@@ -108,150 +108,148 @@ interface SpotifySearchResponse {
   };
 }
 
-const trackRoutes: FastifyPluginAsync = async (fastify) => {
-  fastify.get(
-    '/next',
-    {
-      onRequest: [fastify.authenticate],
-    },
-    async (request: FastifyRequest) => {
-      const userId = (request.user as { userId: string }).userId;
+// Fetch and store tracks from Spotify
+async function fetchAndStoreTracks(userId: string): Promise<Track[] | { error: string }> {
+  console.log('fetchAndStoreTracks called for userId:', userId);
+  
+  // Use direct query to ensure we get accessToken column
+  const result = await db
+    .select()
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+  
+  let userRecord = result[0] || null;
+  console.log('userRecord found:', !!userRecord, 'accessToken:', !!userRecord?.accessToken, 'tokenExpiry:', userRecord?.tokenExpiry, 'hasRefresh:', !!userRecord?.refreshToken);
 
-      // First, check if user has swiped any tracks
-      const userSwipes = await db.query.swipes.findMany({
-        where: eq(swipes.userId, userId),
-        columns: { trackId: true },
-      });
+  // If refresh token is missing, user needs to re-authenticate
+  if (!userRecord?.refreshToken) {
+    console.log('No refresh token - user needs fresh login');
+    return { error: 'reauth_required' };
+  }
 
-      const swipedTrackIds = userSwipes.map((s: { trackId: string }) => s.trackId);
+  const env = {
+    SPOTIFY_CLIENT_ID: process.env.SPOTIFY_CLIENT_ID!,
+    SPOTIFY_CLIENT_SECRET: process.env.SPOTIFY_CLIENT_SECRET!,
+    ENCRYPTION_KEY: process.env.ENCRYPTION_KEY!,
+  };
 
-      // Try to get existing tracks from database
-      let availableTracks = await db.query.tracks.findMany({
-        where: swipedTrackIds.length > 0 ? notInArray(tracks.id, swipedTrackIds) : undefined,
-        limit: 1,
-      });
-
-      if (availableTracks.length === 0) {
-        const result = await fetchAndStoreTracks(userId);
-        if ('error' in result) {
-          return result; // Return error object
-        }
-        availableTracks = result;
-      }
-
-      return { tracks: availableTracks };
-    },
-  );
-
-  async function fetchAndStoreTracks(userId: string): Promise<Track[] | { error: string }> {
-    console.log('fetchAndStoreTracks called for userId:', userId);
+  let accessToken = userRecord.accessToken;
+  // Check if we need to refresh the access token
+  const needsRefresh = !accessToken || (userRecord?.tokenExpiry && new Date(userRecord.tokenExpiry) < new Date());
+  
+  if (needsRefresh) {
+    console.log('Access token expired or missing, refreshing...');
     
-    // Use direct query to ensure we get accessToken column
-    const result = await db
-      .select()
-      .from(users)
-      .where(eq(users.id, userId))
-      .limit(1);
+    const decryptedRefreshToken = decrypt(userRecord.refreshToken, env.ENCRYPTION_KEY);
+    console.log('Attempting to refresh with decrypt check:', decryptedRefreshToken ? 'token present' : 'empty');
     
-    let userRecord = result[0] || null;
-    console.log('userRecord found:', !!userRecord, 'accessToken:', !!userRecord?.accessToken, 'tokenExpiry:', userRecord?.tokenExpiry, 'hasRefresh:', !!userRecord?.refreshToken);
-
-    // If refresh token is missing, user needs to re-authenticate
-    if (!userRecord?.refreshToken) {
-      console.log('No refresh token - user needs fresh login');
-      return { error: 'reauth_required' };
-    }
-
-    const env = {
-      SPOTIFY_CLIENT_ID: process.env.SPOTIFY_CLIENT_ID!,
-      SPOTIFY_CLIENT_SECRET: process.env.SPOTIFY_CLIENT_SECRET!,
-      ENCRYPTION_KEY: process.env.ENCRYPTION_KEY!,
-    };
-
-    let accessToken = userRecord.accessToken;
-    // Check if we need to refresh the access token
-    const needsRefresh = !accessToken || (userRecord?.tokenExpiry && new Date(userRecord.tokenExpiry) < new Date());
-    
-    if (needsRefresh) {
-      console.log('Access token expired or missing, refreshing...');
-      
-      const decryptedRefreshToken = decrypt(userRecord.refreshToken, env.ENCRYPTION_KEY);
-      console.log('Attempting to refresh with decrypt check:', decryptedRefreshToken ? 'token present' : 'empty');
-      
-      const refreshed = await refreshAccessToken(decryptedRefreshToken);
-      if (refreshed) {
-        accessToken = refreshed.accessToken;
-        // Update user with new token
-        await db
-          .update(users)
-          .set({
-            accessToken: refreshed.accessToken,
-            tokenExpiry: new Date(Date.now() + refreshed.expiresIn * 1000),
-          })
-          .where(eq(users.id, userId));
-        console.log('Token refreshed successfully');
-      } else {
-        console.log('Token refresh failed, returning empty');
-        return [];
-      }
-    }
-
-    // Use Search API which works for development mode apps
-    const randomGenre = DISCOVERY_GENRES[Math.floor(Math.random() * DISCOVERY_GENRES.length)];
-    const params = new URLSearchParams({
-      q: `genre:${randomGenre} year:2024`,
-      type: 'track',
-      limit: '50',
-      market: 'US',
-    });
-
-    const searchResponse = await fetch(`${SPOTIFY_API_URL}/search?${params}`, {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-      },
-    });
-
-    console.log('Spotify search response status:', searchResponse.status);
-    
-    if (!searchResponse.ok) {
-      const errorText = await searchResponse.text();
-      console.error('Search failed:', searchResponse.status, errorText);
+    const refreshed = await refreshAccessToken(decryptedRefreshToken);
+    if (refreshed) {
+      accessToken = refreshed.accessToken;
+      // Update user with new token
+      await db
+        .update(users)
+        .set({
+          accessToken: refreshed.accessToken,
+          tokenExpiry: new Date(Date.now() + refreshed.expiresIn * 1000),
+        })
+        .where(eq(users.id, userId));
+      console.log('Token refreshed successfully');
+    } else {
+      console.log('Token refresh failed, returning empty');
       return [];
     }
-
-    const data = (await searchResponse.json()) as SpotifySearchResponse;
-    console.log('Spotify search returned tracks:', data.tracks?.items?.length || 0);
-    const spotifyTracks = data.tracks.items;
-
-    const newTracks = await db
-      .insert(tracks)
-      .values(
-        spotifyTracks.map((t) => ({
-          spotifyId: t.id,
-          name: t.name,
-          artist: t.artists.map((a) => a.name).join(', '),
-          album: t.album?.name ?? null,
-          previewUrl: t.preview_url,
-          imageUrl: t.album?.images?.[0]?.url ?? null,
-          durationMs: t.duration_ms,
-          popularity: t.popularity,
-        })),
-      )
-      .onConflictDoNothing()
-      .returning();
-
-    return (newTracks as Track[]).map((t) => ({
-      id: t.id,
-      spotifyId: t.spotifyId,
-      name: t.name,
-      artist: t.artist,
-      album: t.album,
-      previewUrl: t.previewUrl,
-      imageUrl: t.imageUrl,
-      durationMs: t.durationMs,
-      popularity: t.popularity,
-    }));
   }
+
+  // Use Search API which works for development mode apps
+  const randomGenre = DISCOVERY_GENRES[Math.floor(Math.random() * DISCOVERY_GENRES.length)];
+  const params = new URLSearchParams({
+    q: `genre:${randomGenre} year:2024`,
+    type: 'track',
+    limit: '50',
+    market: 'US',
+  });
+
+  const searchResponse = await fetch(`${SPOTIFY_API_URL}/search?${params}`, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+
+  console.log('Spotify search response status:', searchResponse.status);
+  
+  if (!searchResponse.ok) {
+    const errorText = await searchResponse.text();
+    console.error('Search failed:', searchResponse.status, errorText);
+    return [];
+  }
+
+  const data = (await searchResponse.json()) as SpotifySearchResponse;
+  console.log('Spotify search returned tracks:', data.tracks?.items?.length || 0);
+  const spotifyTracks = data.tracks.items;
+
+  const newTracks = await db
+    .insert(tracks)
+    .values(
+      spotifyTracks.map((t) => ({
+        spotifyId: t.id,
+        name: t.name,
+        artist: t.artists.map((a) => a.name).join(', '),
+        album: t.album?.name ?? null,
+        previewUrl: t.preview_url,
+        imageUrl: t.album?.images?.[0]?.url ?? null,
+        durationMs: t.duration_ms,
+        popularity: t.popularity,
+      })),
+    )
+    .onConflictDoNothing()
+    .returning();
+
+  return (newTracks as Track[]).map((t) => ({
+    id: t.id,
+    spotifyId: t.spotifyId,
+    name: t.name,
+    artist: t.artist,
+    album: t.album,
+    previewUrl: t.previewUrl,
+    imageUrl: t.imageUrl,
+    durationMs: t.durationMs,
+    popularity: t.popularity,
+  }));
+}
+
+const trackRoutes: FastifyPluginAsync = async (fastify) => {
+  fastify.get('/next', {
+    onRequest: [fastify.authenticate],
+  }, async (request: FastifyRequest) => {
+    const userId = (request.user as { userId: string }).userId;
+
+    // First, check if user has swiped any tracks
+    const userSwipes = await db.query.swipes.findMany({
+      where: eq(swipes.userId, userId),
+      columns: { trackId: true },
+    });
+
+    const swipedTrackIds = userSwipes.map((s: { trackId: string }) => s.trackId);
+
+    // Try to get existing tracks from database
+    let availableTracks = await db.query.tracks.findMany({
+      where: swipedTrackIds.length > 0 ? notInArray(tracks.id, swipedTrackIds) : undefined,
+      limit: 1,
+    });
+
+    if (availableTracks.length === 0) {
+      const result = await fetchAndStoreTracks(userId);
+      if ('error' in result) {
+        console.log('fetchAndStoreTracks returned error:', result.error);
+        return result; // Return error object like { error: 'reauth_required' }
+      }
+      availableTracks = result;
+    }
+
+    return { tracks: availableTracks };
+  });
 };
 
 export default trackRoutes;
