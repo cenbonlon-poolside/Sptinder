@@ -22,35 +22,9 @@ function App() {
 
   // Read token from URL hash fragment (set by callback after OAuth)
   // This bypasses Chrome's bounce tracking protection on httpOnly cookies
+  // Combined with auth check to avoid race conditions
   useEffect(() => {
-    const hash = window.location.hash.slice(1); // Remove #
-    const hashParams = new URLSearchParams(hash);
-    const token = hashParams.get('token');
-    
-    if (token) {
-      // Store token in localStorage to persist
-      localStorage.setItem('authToken', token);
-      // Clear the hash from URL
-      window.history.replaceState({}, document.title, window.location.pathname);
-    }
-  }, []);
-  
-  // DEBUG: Show alert on first render
-  useEffect(() => {
-    console.log('App mounted, authenticated:', authenticated);
-  }, []);
-  
-  console.log('App rendering, state:', { authenticated, loading, hasTrack: !!track });
-
-  // Clear the #_=_ fragment that Spotify adds
-  useEffect(() => {
-    if (window.location.hash === '#_=_') {
-      window.history.replaceState({}, document.title, window.location.pathname);
-    }
-  }, []);
-
-  useEffect(() => {
-    // Check for error from redirect
+    // Check for error from redirect first
     try {
       const urlParams = new URLSearchParams(window.location.search);
       const errorParam = urlParams.get('error');
@@ -60,9 +34,27 @@ function App() {
     } catch (err) {
       console.error('URL params parse error:', err);
     }
+
+    // Check for token in hash fragment
+    const hash = window.location.hash.slice(1);
+    const hashParams = new URLSearchParams(hash);
+    const token = hashParams.get('token');
     
+    if (token) {
+      // Store token in localStorage to persist
+      localStorage.setItem('authToken', token);
+      // Clear the hash from URL
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+    
+    // Now check auth - token is already in localStorage if present
     checkAuth();
-  }, []);
+
+    // Clear the #_=_ fragment that Spotify adds
+    if (window.location.hash === '#_=_') {
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  }, []); // Empty deps = runs once on mount
 
   const checkAuth = async () => {
     try {
