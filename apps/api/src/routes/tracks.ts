@@ -69,11 +69,14 @@ const trackRoutes: FastifyPluginAsync = async (fastify) => {
   );
 
   async function fetchAndStoreTracks(userId: string): Promise<Track[]> {
+    console.log('fetchAndStoreTracks called for userId:', userId);
     const userRecord = await db.query.users.findFirst({
       where: eq(users.id, userId),
     });
+    console.log('userRecord found:', !!userRecord, 'accessToken:', !!userRecord?.accessToken);
 
     if (!userRecord?.accessToken) {
+      console.log('No access token, returning empty');
       return [];
     }
 
