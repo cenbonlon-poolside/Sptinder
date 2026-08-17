@@ -22,10 +22,13 @@ services:
         value: 3hLjWqZ6tvMLXGTNaCeyKEXFk27yoNyM
       - key: REDIRECT_URI
         value: https://sptinder-api.onrender.com/auth/callback
+      # Add DATABASE_URL after creating PostgreSQL database
+      # - key: DATABASE_URL
+      #   value: <paste-connection-string-here>
 
-# Static site needs to be deployed separately
-# Deploy via "New Static Site" manually
-# - Name: sptinder-web
-# - Root Directory: apps/web
-# - Build Command: npm install && npm run build
-# - Publish Directory: dist
+# Deploy Static Site separately:
+# 1. "New +" → "Static Site"
+# 2. Name: sptinder-web
+# 3. Root Directory: apps/web  
+# 4. Build Command: npm install && npm run build
+# 5. Publish Directory: dist

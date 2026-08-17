@@ -1,10 +1,15 @@
 import { db } from '../db/index.js';
 import { playlists, swipes, users } from '../db/schema.js';
 import { eq } from 'drizzle-orm';
-import { validateEnv } from '../env.js';
-const env = validateEnv();
 const SPOTIFY_API_URL = 'https://api.spotify.com/v1';
+function getEnv() {
+    return {
+        SPOTIFY_CLIENT_ID: process.env.SPOTIFY_CLIENT_ID,
+        SPOTIFY_CLIENT_SECRET: process.env.SPOTIFY_CLIENT_SECRET,
+    };
+}
 async function refreshAccessToken(refreshToken) {
+    const env = getEnv();
     const response = await fetch('https://accounts.spotify.com/api/token', {
         method: 'POST',
         headers: {

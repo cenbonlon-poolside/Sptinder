@@ -2,9 +2,18 @@ import { z } from 'zod';
 import { db } from '../db/index.js';
 import { users } from '../db/schema.js';
 import { eq } from 'drizzle-orm';
-import { validateEnv } from '../env.js';
 import crypto from 'crypto';
-const env = validateEnv();
+// Get env values directly from process.env (no validation at import time)
+function getEnv() {
+    return {
+        SPOTIFY_CLIENT_ID: process.env.SPOTIFY_CLIENT_ID,
+        SPOTIFY_CLIENT_SECRET: process.env.SPOTIFY_CLIENT_SECRET,
+        JWT_SECRET: process.env.JWT_SECRET,
+        ENCRYPTION_KEY: process.env.ENCRYPTION_KEY,
+        PORT: Number(process.env.PORT || 3000),
+        NODE_ENV: (process.env.NODE_ENV || 'development'),
+    };
+}
 const SPOTIFY_AUTH_URL = 'https://accounts.spotify.com/authorize';
 const SPOTIFY_TOKEN_URL = 'https://accounts.spotify.com/api/token';
 const SPOTIFY_PROFILE_URL = 'https://api.spotify.com/v1/me';
@@ -32,6 +41,7 @@ function encrypt(text, key) {
     return `${iv.toString('hex')}:${encrypted}:${authTag.toString('hex')}`;
 }
 async function refreshAccessToken(refreshToken) {
+    const env = getEnv();
     const response = await fetch(SPOTIFY_TOKEN_URL, {
         method: 'POST',
         headers: {
@@ -55,6 +65,7 @@ async function refreshAccessToken(refreshToken) {
 }
 const authRoutes = async (fastify) => {
     fastify.get('/login', async (request, reply) => {
+        const env = getEnv();
         const codeVerifier = generateCodeVerifier();
         const codeChallenge = generateCodeChallenge(codeVerifier);
         const state = crypto.randomBytes(16).toString('hex');
@@ -87,6 +98,7 @@ const authRoutes = async (fastify) => {
         state: z.string().optional(),
     });
     fastify.get('/callback', async (request, reply) => {
+        const env = getEnv();
         const { code, state } = callbackBodySchema.parse(request.query);
         const redirectUri = getRedirectUri(request);
         const storedState = request.cookies['spotify_state'];
