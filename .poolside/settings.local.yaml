@@ -22,3 +22,6 @@ tools:
             - git status *
             - git add *
             - git commit *
+            - which wrangler vercel flyctl *
+            - sleep 10
+            - which vercel

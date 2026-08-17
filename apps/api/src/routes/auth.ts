@@ -12,6 +12,8 @@ const SPOTIFY_AUTH_URL = 'https://accounts.spotify.com/authorize';
 const SPOTIFY_TOKEN_URL = 'https://accounts.spotify.com/api/token';
 const SPOTIFY_PROFILE_URL = 'https://api.spotify.com/v1/me';
 
+const REDIRECT_URI = 'https://caddie-deploy-vehicular.ngrok-free.dev/auth/callback';
+
 function generateCodeVerifier(): string {
   return crypto.randomBytes(64).toString('hex').slice(0, 128);
 }
@@ -85,7 +87,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
     const params = new URLSearchParams({
       client_id: env.SPOTIFY_CLIENT_ID,
       response_type: 'code',
-      redirect_uri: `${request.headers.origin}/auth/callback`,
+      redirect_uri: REDIRECT_URI,
       code_challenge_method: 'S256',
       code_challenge: codeChallenge,
       state,
@@ -94,13 +96,13 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
 
     reply.setCookie('spotify_verifier', codeVerifier, {
       httpOnly: true,
-      secure: env.NODE_ENV === 'production',
+      secure: true,
       sameSite: 'lax',
       maxAge: 300,
     });
     reply.setCookie('spotify_state', state, {
       httpOnly: true,
-      secure: env.NODE_ENV === 'production',
+      secure: true,
       sameSite: 'lax',
       maxAge: 300,
     });
@@ -113,8 +115,8 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
     state: z.string().optional(),
   });
 
-  fastify.post('/callback', async (request, reply) => {
-    const { code, state } = callbackBodySchema.parse(request.body);
+  fastify.get('/callback', async (request, reply) => {
+    const { code, state } = callbackBodySchema.parse(request.query as any);
 
     const storedState = request.cookies['spotify_state'];
     const codeVerifier = request.cookies['spotify_verifier'];
@@ -137,7 +139,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
         client_secret: env.SPOTIFY_CLIENT_SECRET,
         grant_type: 'authorization_code',
         code,
-        redirect_uri: `${request.headers.origin}/auth/callback`,
+        redirect_uri: REDIRECT_URI,
         code_verifier: codeVerifier,
       }),
     });
@@ -195,7 +197,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       .clearCookie('spotify_state')
       .setCookie('token', token, {
         httpOnly: true,
-        secure: env.NODE_ENV === 'production',
+        secure: true,
         sameSite: 'lax',
         maxAge: 60 * 60 * 24 * 7,
       })

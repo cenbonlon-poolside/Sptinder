@@ -1,24 +1,21 @@
 import { FastifyPluginAsync, FastifyRequest } from 'fastify';
-import { z } from 'zod';
 import { db } from '../db/index.js';
 import { tracks, users, swipes } from '../db/schema.js';
 import { eq, notInArray } from 'drizzle-orm';
 
 const SPOTIFY_API_URL = 'https://api.spotify.com/v1';
 
-const trackResponseSchema = z.object({
-  id: z.string(),
-  spotifyId: z.string(),
-  name: z.string(),
-  artist: z.string(),
-  album: z.string().nullable(),
-  previewUrl: z.string().nullable(),
-  imageUrl: z.string().nullable(),
-  durationMs: z.number().int().positive().nullable(),
-  popularity: z.number().int().min(0).max(100).nullable(),
-});
-
-type Track = z.infer<typeof trackResponseSchema>;
+interface Track {
+  id: string;
+  spotifyId: string;
+  name: string;
+  artist: string;
+  album: string | null;
+  previewUrl: string | null;
+  imageUrl: string | null;
+  durationMs: number | null;
+  popularity: number | null;
+}
 
 interface SpotifyGenreResponse {
   genres: string[];
@@ -41,13 +38,6 @@ const trackRoutes: FastifyPluginAsync = async (fastify) => {
     '/next',
     {
       onRequest: [fastify.authenticate],
-      schema: {
-        response: {
-          200: z.object({
-            tracks: z.array(trackResponseSchema),
-          }),
-        },
-      },
     },
     async (request: FastifyRequest) => {
       const userId = (request.user as { userId: string }).userId;

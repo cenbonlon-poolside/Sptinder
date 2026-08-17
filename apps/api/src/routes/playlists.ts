@@ -52,18 +52,6 @@ const playlistRoutes: FastifyPluginAsync = async (fastify) => {
     '/sync',
     {
       onRequest: [fastify.authenticate],
-      schema: {
-        response: {
-          200: z.object({
-            success: z.boolean(),
-            playlist: z.object({
-              id: z.string(),
-              spotifyPlaylistId: z.string(),
-              trackCount: z.number(),
-            }).nullable(),
-          }),
-        },
-      },
     },
     async (request: FastifyRequest) => {
       const userId = (request.user as { userId: string }).userId;

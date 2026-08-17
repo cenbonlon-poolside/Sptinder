@@ -1,4 +1,3 @@
-import { z } from 'zod';
 import { db } from '../db/index.js';
 import { playlists, swipes, users } from '../db/schema.js';
 import { eq } from 'drizzle-orm';
@@ -30,18 +29,6 @@ async function refreshAccessToken(refreshToken) {
 const playlistRoutes = async (fastify) => {
     fastify.post('/sync', {
         onRequest: [fastify.authenticate],
-        schema: {
-            response: {
-                200: z.object({
-                    success: z.boolean(),
-                    playlist: z.object({
-                        id: z.string(),
-                        spotifyPlaylistId: z.string(),
-                        trackCount: z.number(),
-                    }).nullable(),
-                }),
-            },
-        },
     }, async (request) => {
         const userId = request.user.userId;
         const user = await db.query.users.findFirst({

@@ -2,9 +2,13 @@ import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import cookie from '@fastify/cookie';
 import jwt from '@fastify/jwt';
+import staticPlugin from '@fastify/static';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { validateEnv } from './env.js';
 import apiRoutes from './routes/index.js';
 const env = validateEnv();
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 async function buildServer() {
     const fastify = Fastify({
         logger: true,
@@ -31,7 +35,16 @@ async function buildServer() {
     });
     // Health check
     fastify.get('/health', async () => ({ status: 'ok' }));
+    // Serve web frontend
+    await fastify.register(staticPlugin, {
+        root: path.join(__dirname, '../../web/dist'),
+        prefix: '/',
+    });
     await fastify.register(apiRoutes, { prefix: '/api' });
+    // Serve index.html for all non-API routes (SPA support)
+    fastify.setNotFoundHandler(async (_request, reply) => {
+        return reply.sendFile('index.html');
+    });
     return fastify;
 }
 async function start() {
