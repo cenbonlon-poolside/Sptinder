@@ -205,6 +205,7 @@ async function fetchAndStoreTracks(userId: string): Promise<Track[] | { error: s
 
     const data = (await searchResponse.json()) as SpotifySearchResponse;
     console.log(`Search '${query}' response:`, JSON.stringify(data).substring(0, 200));
+    console.log(`Search '${query}' tracks object:`, data.tracks ? 'exists' : 'MISSING', 'items:', data.tracks?.items ? 'exists' : 'MISSING/NULL');
     
     // Check for error in response body
     if (data && typeof data === 'object' && 'error' in data) {
