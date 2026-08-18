@@ -13,6 +13,23 @@ export const users = pgTable('users', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 
+// User profile data for matching
+export const userProfiles = pgTable('user_profiles', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }).unique(),
+  topArtists: text('top_artists').array(), // Array of artist IDs
+  topGenres: text('top_genres').array(), // Array of genres
+  topTracks: text('top_tracks').array(), // Array of track IDs
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
+
+export const userProfilesRelations = relations(userProfiles, ({ one }) => ({
+  user: one(users, {
+    fields: [userProfiles.userId],
+    references: [users.id],
+  }),
+}));
+
 export const tracks = pgTable('tracks', {
   id: uuid('id').primaryKey().defaultRandom(),
   spotifyId: text('spotify_id').notNull().unique(),

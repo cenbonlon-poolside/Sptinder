@@ -1,7 +1,7 @@
 import { FastifyPluginAsync, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { db } from '../db/index.js';
-import { users } from '../db/schema.js';
+import { users, userProfiles } from '../db/schema.js';
 import { eq } from 'drizzle-orm';
 import crypto from 'crypto';
 
@@ -446,6 +446,30 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
         const data = (await topArtistsRes.json()) as { items: any[] };
         topArtists = data.items || [];
       }
+      
+      // Store profile data for matching
+      const topArtistIds = topArtists.map((a: any) => a.id);
+      const allGenres = [...new Set(topArtists.flatMap((a: any) => a.genres || []))];
+      const topTrackIds = topTracks.slice(0, 50).map((t: any) => t.id);
+      
+      // Upsert user profile
+      await db
+        .insert(userProfiles)
+        .values({
+          userId: user!.id,
+          topArtists: topArtistIds,
+          topGenres: allGenres,
+          topTracks: topTrackIds,
+        })
+        .onConflictDoUpdate({
+          target: userProfiles.userId,
+          set: {
+            topArtists: topArtistIds,
+            topGenres: allGenres,
+            topTracks: topTrackIds,
+            updatedAt: new Date(),
+          },
+        });
       
       return {
         topTracks: topTracks.map((t: any) => ({
