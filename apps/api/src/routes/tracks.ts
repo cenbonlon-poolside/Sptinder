@@ -202,11 +202,14 @@ async function fetchAndStoreTracks(userId: string): Promise<Track[] | { error: s
     }
 
     const data = (await searchResponse.json()) as SpotifySearchResponse;
-    console.log(`Search '${query}' returned tracks:`, data.tracks?.items?.length || 0);
+    console.log(`Search '${query}' response:`, JSON.stringify(data).substring(0, 200));
     
-    if (data.tracks?.items && data.tracks.items.length > 0) {
-      spotifyTracks = data.tracks.items;
+    const items = data.tracks?.items;
+    if (Array.isArray(items) && items.length > 0) {
+      spotifyTracks = items;
       break;
+    } else if (items) {
+      console.log(`Search '${query}' returned items but length is 0 or not array`);
     }
   }
 
