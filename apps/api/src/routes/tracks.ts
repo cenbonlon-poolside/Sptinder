@@ -145,11 +145,12 @@ async function fetchAndStoreTracks(userId: string): Promise<Track[] | { error: s
     console.log('Access token expired or missing, refreshing...');
     
     const decryptedRefreshToken = decrypt(userRecord.refreshToken, env.ENCRYPTION_KEY);
-    console.log('Attempting to refresh with decrypt check:', decryptedRefreshToken ? 'token present' : 'empty');
+    console.log('Attempting to refresh with decrypt check:', decryptedRefreshToken ? decryptedRefreshToken.substring(0, 20) + '...' : 'empty');
     
     const refreshed = await refreshAccessToken(decryptedRefreshToken);
     if (refreshed) {
       accessToken = refreshed.accessToken;
+      console.log('Refreshed access token received, length:', refreshed.accessToken?.length);
       // Update user with new token
       await db
         .update(users)
@@ -163,6 +164,8 @@ async function fetchAndStoreTracks(userId: string): Promise<Track[] | { error: s
       console.log('Token refresh failed, returning empty');
       return [];
     }
+  } else {
+    console.log('Using existing access token, length:', accessToken?.length);
   }
 
   // Use Search API which works for development mode apps
