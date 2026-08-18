@@ -180,6 +180,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     const tokens = (await tokenResponse.json()) as SpotifyTokenResponse;
+    console.log('Token response received, has access_token:', !!tokens.access_token, 'has refresh_token:', !!tokens.refresh_token);
 
     const profileResponse = await fetch(SPOTIFY_PROFILE_URL, {
       headers: {
@@ -234,11 +235,12 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
           })
           .returning();
       }
+      console.log('New user created, has accessToken:', !!result[0]?.accessToken, 'has refreshToken:', !!result[0]?.refreshToken);
       user = result[0];
     } else {
       console.log('Updating existing user, spotifyId:', profile.id, 'userId:', user.id);
       try {
-        await db
+        const updateResult = await db
           .update(users)
           .set({
             refreshToken: encrypt(tokens.refresh_token, env.ENCRYPTION_KEY),
@@ -246,6 +248,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
             tokenExpiry: new Date(Date.now() + tokens.expires_in * 1000),
           })
           .where(eq(users.id, user.id));
+        console.log('Update result:', JSON.stringify(updateResult));
         
         // Fetch the updated user to verify
         const updated = await db
@@ -253,7 +256,8 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
           .from(users)
           .where(eq(users.id, user.id))
           .limit(1);
-        console.log('User updated, has accessToken:', !!updated[0]?.accessToken, 'has refreshToken:', !!updated[0]?.refreshToken);
+        console.log('User updated, has accessToken:', !!updated[0]?.accessToken, 'has refreshToken:', !!updated[0]?.refreshToken, 'tokenExpiry:', !!updated[0]?.tokenExpiry);
+        user = updated[0]; // Update the user variable
       } catch (err) {
         console.error('Update failed:', err);
       }

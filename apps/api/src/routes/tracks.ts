@@ -172,12 +172,11 @@ async function fetchAndStoreTracks(userId: string): Promise<Track[] | { error: s
   // Note: 'genre:' filter is for Recommendations API, not Search
   // Search API uses different query syntax
   const searchQueries = [
+    'a', // Simple query that should match many tracks
     'year:2024',
     'year:2023',
     'track:hello',
     'artist:queen',
-    'pop',
-    'rock',
     'test',
   ];
 
