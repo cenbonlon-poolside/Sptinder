@@ -243,7 +243,11 @@ async function fetchAndStoreTracks(userId: string): Promise<Track[] | { error: s
       '4iV5W9uYEdYUVa79Axb7Rh', // Bohemian Rhapsody
       '7ouMYWpwJ422jRcDASZB7P', // Stairway to Heaven
       '1lDWb6b6ieDQ2xT7ewTC3G', // Hotel California
+      '6rqhFgbbKwnb9MLmUQDhG6', // Another One Bites the Dust
+      '4uLU6hMCjMI75M1A2tKUQ3', // Don't Stop Me Now
     ];
+    
+    const fallbackTracks: SpotifySearchResponse['tracks']['items'] = [];
     
     for (const trackId of fallbackTrackIds) {
       try {
@@ -253,8 +257,7 @@ async function fetchAndStoreTracks(userId: string): Promise<Track[] | { error: s
         if (trackResponse.ok) {
           const trackData = (await trackResponse.json()) as SpotifyTrackResponse;
           console.log(`Fallback track ${trackId} fetched successfully`);
-          // Convert single track to the expected format
-          spotifyTracks = [{
+          fallbackTracks.push({
             id: trackData.id,
             name: trackData.name,
             artists: trackData.artists,
@@ -262,14 +265,18 @@ async function fetchAndStoreTracks(userId: string): Promise<Track[] | { error: s
             preview_url: trackData.preview_url,
             duration_ms: trackData.duration_ms,
             popularity: trackData.popularity,
-          }];
-          break;
+          });
         } else {
           console.log(`Fallback track ${trackId} failed:`, trackResponse.status);
         }
       } catch (err) {
         console.log(`Fallback track ${trackId} error:`, err);
       }
+    }
+    
+    if (fallbackTracks.length > 0) {
+      spotifyTracks = fallbackTracks;
+      console.log(`Fallback returned ${fallbackTracks.length} tracks`);
     }
     
     if (spotifyTracks.length === 0) {
