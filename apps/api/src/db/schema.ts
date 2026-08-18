@@ -99,16 +99,41 @@ export const playlistsRelations = relations(playlists, ({ one }) => ({
   }),
 }));
 
+// Chat messages table
+export const chatMessages = pgTable('chat_messages', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  fromUserId: uuid('from_user_id').notNull().references(() => users.id),
+  toUserId: uuid('to_user_id').notNull().references(() => users.id),
+  message: text('message').notNull(),
+  sentAt: timestamp('sent_at').defaultNow().notNull(),
+  readAt: timestamp('read_at'),
+});
+
+export const chatMessagesRelations = relations(chatMessages, ({ one }) => ({
+  fromUser: one(users, {
+    fields: [chatMessages.fromUserId],
+    references: [users.id],
+  }),
+  toUser: one(users, {
+    fields: [chatMessages.toUserId],
+    references: [users.id],
+  }),
+}));
+
 // Export all schema including relations for query API
 export const schema = {
   users,
   tracks,
   swipes,
   playlists,
+  userProfiles,
+  chatMessages,
   usersRelations,
   tracksRelations,
   swipesRelations,
   playlistsRelations,
+  userProfilesRelations,
+  chatMessagesRelations,
 };
 
 export type User = typeof users.$inferSelect;
@@ -119,3 +144,7 @@ export type Swipe = typeof swipes.$inferSelect;
 export type NewSwipe = typeof swipes.$inferInsert;
 export type Playlist = typeof playlists.$inferSelect;
 export type NewPlaylist = typeof playlists.$inferInsert;
+export type UserProfile = typeof userProfiles.$inferSelect;
+export type NewUserProfile = typeof userProfiles.$inferInsert;
+export type ChatMessage = typeof chatMessages.$inferSelect;
+export type NewChatMessage = typeof chatMessages.$inferInsert;

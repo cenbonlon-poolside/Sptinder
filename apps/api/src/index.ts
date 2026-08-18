@@ -2,6 +2,7 @@ import Fastify, { FastifyReply, FastifyRequest } from 'fastify';
 import cors from '@fastify/cors';
 import cookie from '@fastify/cookie';
 import jwt from '@fastify/jwt';
+import websocket from '@fastify/websocket';
 import apiRoutes from './routes/index.js';
 import { migrate } from 'drizzle-orm/node-postgres/migrator';
 import { Pool } from 'pg';
@@ -78,6 +79,23 @@ async function initTables() {
         "name" text DEFAULT 'Sptinder' NOT NULL,
         "synced_at" timestamp
       );
+      CREATE TABLE IF NOT EXISTS "user_profiles" (
+        "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+        "user_id" uuid NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+        "top_artists" text[],
+        "top_genres" text[],
+        "top_tracks" text[],
+        "updated_at" timestamp DEFAULT now() NOT NULL,
+        CONSTRAINT "user_profiles_user_id_unique" UNIQUE("user_id")
+      );
+      CREATE TABLE IF NOT EXISTS "chat_messages" (
+        "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+        "from_user_id" uuid NOT NULL REFERENCES "users"("id"),
+        "to_user_id" uuid NOT NULL REFERENCES "users"("id"),
+        "message" text NOT NULL,
+        "sent_at" timestamp DEFAULT now() NOT NULL,
+        "read_at" timestamp
+      );
     `);
     console.log('Tables initialized');
   } catch (err) {
@@ -107,6 +125,8 @@ async function buildServer() {
     },
   });
 
+  await fastify.register(websocket);
+
   fastify.decorate(
     'authenticate',
     async (request: FastifyRequest, reply: FastifyReply) => {
@@ -129,6 +149,31 @@ async function buildServer() {
 
   // Health check
   fastify.get('/health', async () => ({ status: 'ok' }));
+
+  // WebSocket endpoint for chat
+  fastify.get('/ws', { websocket: true }, (connection, request) => {
+    // Store connected users
+    const userId = (request as any).user?.userId;
+    if (!userId) {
+      connection.socket.close(1008, 'Unauthorized');
+      return;
+    }
+    
+    console.log(`User ${userId} connected to chat`);
+    
+    connection.socket.on('message', async (message: Buffer) => {
+      const data = JSON.parse(message.toString());
+      if (data.type === 'chat' && data.toUserId && data.message) {
+        // Store message in database
+        // In a real app, this would be handled by a chat service
+        console.log(`Chat from ${userId} to ${data.toUserId}: ${data.message}`);
+      }
+    });
+    
+    connection.socket.on('close', () => {
+      console.log(`User ${userId} disconnected from chat`);
+    });
+  });
 
   await fastify.register(apiRoutes, { prefix: '/api' });
 
