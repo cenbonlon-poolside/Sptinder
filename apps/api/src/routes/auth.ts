@@ -48,6 +48,33 @@ function encrypt(text: string, key: string): string {
   return `${iv.toString('hex')}:${encrypted}:${authTag.toString('hex')}`;
 }
 
+function decrypt(text: string, key: string): string {
+  const parts = text.split(':');
+  if (parts.length !== 3) {
+    console.error('Decrypt failed - wrong format, parts:', parts.length);
+    return '';
+  }
+  if (key.length !== 32) {
+    console.error('Decrypt failed - wrong key length:', key.length);
+    return '';
+  }
+  try {
+    const [ivHex, encrypted, authTagHex] = parts;
+    const decipher = crypto.createDecipheriv(
+      'aes-256-gcm',
+      Buffer.from(key),
+      Buffer.from(ivHex, 'hex')
+    );
+    decipher.setAuthTag(Buffer.from(authTagHex, 'hex'));
+    let decrypted = decipher.update(encrypted, 'hex', 'utf8');
+    decrypted += decipher.final('utf8');
+    return decrypted;
+  } catch (err) {
+    console.error('Decrypt error:', err);
+    return '';
+  }
+}
+
 async function refreshAccessToken(refreshToken: string): Promise<{
   accessToken: string;
   refreshToken: string;
@@ -356,6 +383,85 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       
       // Clear auth token from localStorage on frontend
       return { success: true, message: 'Logged out - please re-login' };
+    },
+  });
+
+  // Get user's top tracks and artists from Spotify
+  fastify.get('/profile', {
+    onRequest: [fastify.authenticate],
+    handler: async (request, reply) => {
+      const userId = (request.user as { userId: string }).userId;
+      
+      // Get user's access token
+      const userResult = await db
+        .select()
+        .from(users)
+        .where(eq(users.id, userId))
+        .limit(1);
+      
+      const user = userResult[0];
+      if (!user?.accessToken) {
+        return reply.status(401).send({ error: 'No access token' });
+      }
+      
+      let accessToken = user.accessToken;
+      const env = getEnv();
+      
+      // Refresh token if expired
+      if (user?.tokenExpiry && new Date(user.tokenExpiry) < new Date()) {
+        console.log('Refreshing token for profile fetch');
+        const decryptedRefreshToken = decrypt(user.refreshToken, env.ENCRYPTION_KEY);
+        const refreshed = await refreshAccessToken(decryptedRefreshToken);
+        if (refreshed) {
+          accessToken = refreshed.accessToken;
+          await db
+            .update(users)
+            .set({
+              accessToken: refreshed.accessToken,
+              tokenExpiry: new Date(Date.now() + refreshed.expiresIn * 1000),
+            })
+            .where(eq(users.id, userId));
+        }
+      }
+      
+      // Fetch top tracks and artists from Spotify
+      const [topTracksRes, topArtistsRes] = await Promise.all([
+        fetch('https://api.spotify.com/v1/me/top/tracks?limit=20', {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        }),
+        fetch('https://api.spotify.com/v1/me/top/artists?limit=20', {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        }),
+      ]);
+      
+      let topTracks: any[] = [];
+      let topArtists: any[] = [];
+      
+      if (topTracksRes.ok) {
+        const data = (await topTracksRes.json()) as { items: any[] };
+        topTracks = data.items || [];
+      }
+      
+      if (topArtistsRes.ok) {
+        const data = (await topArtistsRes.json()) as { items: any[] };
+        topArtists = data.items || [];
+      }
+      
+      return {
+        topTracks: topTracks.map((t: any) => ({
+          id: t.id,
+          name: t.name,
+          artists: t.artists.map((a: any) => a.name).join(', '),
+          album: t.album?.name,
+          imageUrl: t.album?.images?.[0]?.url,
+        })),
+        topArtists: topArtists.map((a: any) => ({
+          id: a.id,
+          name: a.name,
+          genres: a.genres,
+          imageUrl: a.images?.[0]?.url,
+        })),
+      };
     },
   });
 };
