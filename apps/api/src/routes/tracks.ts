@@ -169,13 +169,16 @@ async function fetchAndStoreTracks(userId: string): Promise<Track[] | { error: s
   }
 
   // Use Search API which works for development mode apps
-  // Query without year restriction for better results on new apps
-  const randomGenre = DISCOVERY_GENRES[Math.floor(Math.random() * DISCOVERY_GENRES.length)];
+  // Note: 'genre:' filter is for Recommendations API, not Search
+  // Search API uses different query syntax
   const searchQueries = [
-    `genre:${randomGenre}`,
-    'pop',
     'year:2024',
+    'year:2023',
     'track:hello',
+    'artist:queen',
+    'pop',
+    'rock',
+    'test',
   ];
 
   let spotifyTracks: SpotifySearchResponse['tracks']['items'] = [];
