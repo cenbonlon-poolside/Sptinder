@@ -108,6 +108,16 @@ interface SpotifySearchResponse {
   };
 }
 
+interface SpotifyTrackResponse {
+  id: string;
+  name: string;
+  artists: Array<{ name: string }>;
+  album: { name: string; images: Array<{ url: string }> } | null;
+  preview_url: string | null;
+  duration_ms: number;
+  popularity: number;
+}
+
 // Fetch and store tracks from Spotify
 async function fetchAndStoreTracks(userId: string): Promise<Track[] | { error: string }> {
   console.log('fetchAndStoreTracks called for userId:', userId);
@@ -225,8 +235,47 @@ async function fetchAndStoreTracks(userId: string): Promise<Track[] | { error: s
   if (spotifyTracks.length === 0) {
     console.error('All search queries failed, returning empty');
     console.error('This means the Spotify Search API is not returning results for any query');
-    console.error('Possible causes: 1) No tracks match, 2) Access token invalid, 3) API rate limited');
-    return [];
+    console.error('Possible causes: 1) No tracks match, 2) Access token invalid, 3) API rate limited, 4) Development app restriction');
+    
+    // Fallback: fetch specific tracks by known IDs for development apps
+    console.log('Trying fallback: fetching specific tracks by known IDs');
+    const fallbackTrackIds = [
+      '4iV5W9uYEdYUVa79Axb7Rh', // Bohemian Rhapsody
+      '7ouMYWpwJ422jRcDASZB7P', // Stairway to Heaven
+      '1lDWb6b6ieDQ2xT7ewTC3G', // Hotel California
+    ];
+    
+    for (const trackId of fallbackTrackIds) {
+      try {
+        const trackResponse = await fetch(`${SPOTIFY_API_URL}/tracks/${trackId}`, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
+        if (trackResponse.ok) {
+          const trackData = (await trackResponse.json()) as SpotifyTrackResponse;
+          console.log(`Fallback track ${trackId} fetched successfully`);
+          // Convert single track to the expected format
+          spotifyTracks = [{
+            id: trackData.id,
+            name: trackData.name,
+            artists: trackData.artists,
+            album: trackData.album,
+            preview_url: trackData.preview_url,
+            duration_ms: trackData.duration_ms,
+            popularity: trackData.popularity,
+          }];
+          break;
+        } else {
+          console.log(`Fallback track ${trackId} failed:`, trackResponse.status);
+        }
+      } catch (err) {
+        console.log(`Fallback track ${trackId} error:`, err);
+      }
+    }
+    
+    if (spotifyTracks.length === 0) {
+      console.error('Even fallback tracks failed, returning empty');
+      return [];
+    }
   }
 
   const newTracks = await db
